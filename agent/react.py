@@ -21,16 +21,34 @@ TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
 _SYSTEM_PREFIX = """\
 {system_prompt}
 
-You have access to the following tools. To call a tool, output EXACTLY this format:
+You have access to the following tools. To call a tool, output EXACTLY this format and nothing else on that turn:
 
 <tool_call>{{"name": "TOOL_NAME", "arguments": {{...}}}}</tool_call>
 
-After receiving the tool result, continue reasoning and call more tools as needed.
-When you have all the data you need, write your final answer without any <tool_call> tags.
+You will then receive the result and can call more tools or write your final answer.
+Do NOT write any analysis or numbers before calling tools — you have no real data yet.
 Do NOT introduce yourself or greet. Go straight to calling tools.
 
 Available tools:
-{tool_descriptions}"""
+{tool_descriptions}
+
+--- EXAMPLES ---
+
+Example 1 — calling a tool with arguments:
+User: How much did I spend on dining last month?
+Assistant: <tool_call>{{"name": "get_spending_by_category", "arguments": {{"days": 30}}}}</tool_call>
+Tool result: {{"dining": 340.50, "groceries": 210.00}}
+Assistant: You spent $340.50 on dining last month.
+
+Example 2 — calling multiple tools in sequence:
+User: Give me a full spending summary and check for anomalies.
+Assistant: <tool_call>{{"name": "get_spending_by_category", "arguments": {{"days": 30}}}}</tool_call>
+Tool result: {{"dining": 340.50, "transport": 95.00}}
+Assistant: <tool_call>{{"name": "get_anomalies", "arguments": {{"days": 7}}}}</tool_call>
+Tool result: []
+Assistant: Spending this month: dining $340.50, transport $95.00. No anomalies detected.
+
+--- END EXAMPLES ---"""
 
 
 def _build_tool_descriptions(tools: list[BaseTool]) -> str:
@@ -66,30 +84,48 @@ async def run_react(
     ]
 
     tools_called = False
+    last_tool_calls: list[str] = []
 
     for step in range(MAX_STEPS):
         response = await llm.ainvoke(messages)
         reply = response.content
-        logger.debug("[ReAct step %d] model output: %s", step + 1, reply[:300])
+        logger.info("[ReAct step %d] model output: %s", step + 1, reply[:300])
 
         tool_calls = TOOL_CALL_RE.findall(reply)
         if not tool_calls:
             if not tools_called:
                 # Model skipped tools and hallucinated data — force it to call tools
                 logger.warning("[ReAct step %d] No tool calls detected and no tools have been called yet. Redirecting.", step + 1)
+                first_tool = tools[0] if tools else None
+                example = (
+                    f'<tool_call>{{"name": "{first_tool.name}", "arguments": {{}}}}</tool_call>'
+                    if first_tool else ""
+                )
                 messages.append(AIMessage(content=reply))
                 messages.append(HumanMessage(
                     content=(
-                        "STOP. You generated fake data instead of calling tools. "
-                        "Do NOT make up numbers. You MUST call tools to fetch real data first. "
-                        "Call get_spending_by_category now:\n"
-                        '<tool_call>{"name": "get_spending_by_category", "arguments": {"days": 30}}</tool_call>'
+                        "STOP. You must call a tool before writing anything. "
+                        "Do NOT write any analysis or numbers yet — you have no real data. "
+                        f"Output a tool call RIGHT NOW using this exact format:\n{example}"
                     )
                 ))
                 continue
             return reply
 
         tools_called = True
+
+        # Detect if model is repeating the same tool call — break the loop
+        if tool_calls == last_tool_calls:
+            logger.warning("[ReAct step %d] Model repeated the same tool call(s). Forcing final answer.", step + 1)
+            messages.append(HumanMessage(
+                content=(
+                    "You already called that tool and received the result. "
+                    "Do NOT call it again. Write your final answer now based on what you have."
+                )
+            ))
+            response = await llm.ainvoke(messages)
+            return response.content
+        last_tool_calls = tool_calls
 
         messages.append(AIMessage(content=reply))
 
@@ -110,10 +146,16 @@ async def run_react(
                 results.append(f"Tool call failed: {e}")
 
         tool_results = "\n\n".join(results)
-        messages.append(HumanMessage(content=f"Tool results:\n\n{tool_results}\n\nContinue."))
+        messages.append(HumanMessage(content=f"Tool results:\n\n{tool_results}\n\nContinue. If you have enough data to answer, write your final answer now instead of calling more tools."))
 
     logger.warning("ReAct loop reached max steps (%d)", MAX_STEPS)
-    for msg in reversed(messages):
-        if isinstance(msg, AIMessage):
-            return msg.content
-    return ""
+    # Ask the model to produce a final answer from what it has gathered so far
+    messages.append(HumanMessage(
+        content=(
+            "You have reached the maximum number of tool calls. "
+            "Based on the tool results above, write your final answer now. "
+            "Do NOT call any more tools."
+        )
+    ))
+    response = await llm.ainvoke(messages)
+    return response.content

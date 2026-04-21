@@ -10,8 +10,12 @@ logger = logging.getLogger(__name__)
 
 
 def _run(coro):
-    """Run an async coroutine from a sync scheduler job."""
-    asyncio.get_event_loop().run_until_complete(coro)
+    """Run an async coroutine from a sync scheduler job (background-thread safe)."""
+    loop = asyncio.new_event_loop()
+    try:
+        loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 def job_daily_digest():

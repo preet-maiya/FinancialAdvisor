@@ -1,9 +1,11 @@
 import asyncio
 import logging
+import traceback
 
-from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
+import uvicorn
 
 import config  # noqa: F401 — loads env and configures logging
 from storage.database import init_db
@@ -17,6 +19,7 @@ from scheduler.jobs import (
     job_monthly_review,
     job_sync_transactions,
 )
+import web.api as web_api
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +40,7 @@ async def startup() -> None:
         await repo.compute_and_update_baselines()
         logger.info(f"Initial sync complete: {count} transactions.")
     except Exception as e:
-        logger.error(f"Initial sync failed: {e}")
+        logger.error(f"Initial sync failed: {e}\n{traceback.format_exc()}")
 
     # 3. Build account summary for startup message
     summary_lines = []
@@ -62,7 +65,7 @@ async def startup() -> None:
 def main():
     asyncio.run(startup())
 
-    scheduler = BlockingScheduler(timezone=TZ)
+    scheduler = BackgroundScheduler(timezone=TZ)
 
     # Daily digest at 07:00
     scheduler.add_job(
@@ -109,14 +112,19 @@ def main():
         replace_existing=True,
     )
 
+    web_api.set_scheduler(scheduler)
+
+    scheduler.start()
     logger.info("Scheduler started. Jobs registered:")
     for job in scheduler.get_jobs():
         logger.info(f"  - {job.name}: {job.trigger}")
 
     try:
-        scheduler.start()
+        uvicorn.run(web_api.app, host="0.0.0.0", port=config.WEB_PORT)
     except (KeyboardInterrupt, SystemExit):
         logger.info("FinanceAdvisor shutting down.")
+    finally:
+        scheduler.shutdown(wait=False)
 
 
 if __name__ == "__main__":

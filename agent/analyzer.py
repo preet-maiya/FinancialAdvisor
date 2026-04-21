@@ -8,6 +8,7 @@ from agent.react import run_react
 import agent.prompts as prompts
 from data.models import AnalysisResult
 import storage.repository as repo
+from web.repository import get_prompt_override
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,10 @@ async def _run_analysis(analysis_type: str, system_prompt: str, user_message: st
 
 async def daily_digest() -> AnalysisResult:
     today = datetime.now().strftime("%B %d, %Y")
-    system = prompts.DAILY_DIGEST_SYSTEM.format(date=today)
+    override = await get_prompt_override("daily_digest")
+    system = (override or prompts.DAILY_DIGEST_SYSTEM).format(date=today)
     message = (
+        "/no_think "
         "Please generate today's daily financial digest. "
         "Use the available tools to fetch yesterday's spending, budget status, "
         "subscription detection, savings rate, and net worth delta. "
@@ -49,12 +52,15 @@ async def daily_digest() -> AnalysisResult:
 
 
 async def anomaly_check() -> AnalysisResult:
-    system = prompts.ANOMALY_CHECK_SYSTEM
+    override = await get_prompt_override("anomaly_check")
+    system = override or prompts.ANOMALY_CHECK_SYSTEM
     message = (
-        "Run an anomaly detection scan on recent transactions. "
-        "Check for: (1) charges >2x historical average for merchant/category, "
-        "(2) new merchants over $20, (3) duplicate charges within 48 hours, "
-        "(4) subscription price increases. Use get_anomalies and get_top_merchants tools."
+        "/think "
+        "Run an intelligent anomaly detection scan. Use get_spending_by_category, "
+        "get_top_merchants, get_anomalies, and get_subscription_list to gather context. "
+        "Do not just flag rule-based thresholds — reason about what is genuinely unusual "
+        "given the user's overall spending patterns. Consider timing, category context, "
+        "merchant history, and combinations of signals that together suggest something worth flagging."
     )
     result = await _run_analysis("anomaly_check", system, message)
 
@@ -72,8 +78,10 @@ async def anomaly_check() -> AnalysisResult:
 
 async def weekly_report() -> AnalysisResult:
     week_start = datetime.now().strftime("%B %d, %Y")
-    system = prompts.WEEKLY_REPORT_SYSTEM.format(date=week_start)
+    override = await get_prompt_override("weekly_report")
+    system = (override or prompts.WEEKLY_REPORT_SYSTEM).format(date=week_start)
     message = (
+        "/no_think "
         "Generate the weekly financial report. Compare this week's spending to prior week "
         "by category. Identify top 3 overspend categories and top 3 wins. "
         "Calculate savings rate. Report monthly budget progress. "
@@ -87,8 +95,10 @@ async def weekly_report() -> AnalysisResult:
 
 async def monthly_review() -> AnalysisResult:
     month = datetime.now().strftime("%B %Y")
-    system = prompts.MONTHLY_REVIEW_SYSTEM.format(month=month)
+    override = await get_prompt_override("monthly_review")
+    system = (override or prompts.MONTHLY_REVIEW_SYSTEM).format(month=month)
     message = (
+        "/think "
         "Generate the full monthly financial review. Include: income vs expenses, "
         "savings rate vs goal, net worth change, subscription audit, category trends "
         "vs prior 3 months, financial health score (1-10) with reasoning, "

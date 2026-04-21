@@ -1,6 +1,16 @@
 import os
+import ssl
 import logging
+import certifi
 from dotenv import load_dotenv
+
+# Patch ssl to use certifi's CA bundle so aiohttp (and any other library)
+# can verify HTTPS certificates regardless of the system's CA store.
+_orig_create_default_context = ssl.create_default_context
+def _certifi_context(*args, **kwargs):
+    kwargs.setdefault("cafile", certifi.where())
+    return _orig_create_default_context(*args, **kwargs)
+ssl.create_default_context = _certifi_context
 
 load_dotenv()
 
@@ -21,6 +31,9 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # Database
 DB_PATH = os.getenv("DB_PATH", "data/finance.db")
+
+# Web UI
+WEB_PORT = int(os.getenv("WEB_PORT", "8000"))
 
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

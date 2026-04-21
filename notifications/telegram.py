@@ -28,31 +28,35 @@ def _fmt_pct(value: float, show_arrow: bool = True) -> str:
     return f"{value:.1f}%"
 
 
-async def send_message(text: str) -> bool:
+async def send_message(text: str, parse_mode: str = "Markdown") -> bool:
     if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
         logger.warning("Telegram not configured, skipping message.")
         return False
 
     url = f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": config.TELEGRAM_CHAT_ID,
-        "text": text,
-        "parse_mode": "Markdown",
-    }
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status == 200:
-                    logger.info("Telegram message sent successfully.")
-                    return True
-                else:
+    async def _post(payload: dict) -> bool:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status == 200:
+                        logger.info("Telegram message sent successfully.")
+                        return True
                     body = await resp.text()
                     logger.error(f"Telegram API error {resp.status}: {body}")
                     return False
-    except Exception as e:
-        logger.error(f"Failed to send Telegram message: {e}")
-        return False
+        except Exception as e:
+            logger.error(f"Failed to send Telegram message: {e}")
+            return False
+
+    payload = {"chat_id": config.TELEGRAM_CHAT_ID, "text": text, "parse_mode": parse_mode}
+    if await _post(payload):
+        return True
+
+    # Retry without parse_mode if Markdown caused a parse error
+    logger.warning("Retrying Telegram message without parse_mode.")
+    payload.pop("parse_mode")
+    return await _post(payload)
 
 
 async def send_alert(title: str, body: str, urgency: str = "normal") -> bool:

@@ -58,6 +58,18 @@ CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
 CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant);
 CREATE INDEX IF NOT EXISTS idx_alerts_sent_key ON alerts_sent(alert_key);
+
+CREATE TABLE IF NOT EXISTS job_schedule_overrides (
+    id TEXT PRIMARY KEY,
+    minute TEXT, hour TEXT, day TEXT, month TEXT, day_of_week TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS prompt_overrides (
+    job_id TEXT PRIMARY KEY,
+    system_prompt TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 

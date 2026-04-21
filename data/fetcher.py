@@ -1,4 +1,3 @@
-import json
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
@@ -11,31 +10,59 @@ from data.models import Transaction, Account, Budget, CashflowMonth, NetWorthSna
 
 logger = logging.getLogger(__name__)
 
-
-def _get_monarch_client() -> MonarchMoney:
-    return MonarchMoney()
-
-
-async def _ensure_authenticated(mm: MonarchMoney) -> None:
-    email = config.MONARCH_EMAIL
-    password = config.MONARCH_PASSWORD
-    await mm.login(email=email, password=password)
-    logger.info("Authenticated with Monarch Money.")
+# Shared client — authenticated once, reused for all calls.
+# MonarchMoney creates a new aiohttp session per request so this is safe
+# to share across event loops (each scheduler job runs in its own loop).
+_mm: Optional[MonarchMoney] = None
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+async def _get_client() -> MonarchMoney:
+    """Return the shared MonarchMoney client, authenticating at most once."""
+    global _mm
+    if _mm is not None:
+        return _mm
+
+    client = MonarchMoney(session_file=config.MONARCH_SESSION_FILE)
+    try:
+        # Pure file read — no HTTP request when session file is valid
+        await client.load_session(config.MONARCH_SESSION_FILE)
+        logger.info("Monarch: loaded session from file.")
+    except Exception:
+        # First run or session file missing/corrupt — do one real login
+        await client.login(
+            email=config.MONARCH_EMAIL,
+            password=config.MONARCH_PASSWORD,
+            save_session=True,
+        )
+        logger.info("Monarch: authenticated (fresh login, session saved).")
+
+    _mm = client
+    return _mm
+
+
+def _invalidate_client() -> None:
+    """Force re-authentication on the next call (e.g. after a 401)."""
+    global _mm
+    _mm = None
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=5, max=60))
 async def get_transactions(days: int = 30) -> list[Transaction]:
-    mm = _get_monarch_client()
-    await _ensure_authenticated(mm)
+    mm = await _get_client()
 
     start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     end_date = datetime.now().strftime("%Y-%m-%d")
 
-    raw = await mm.get_transactions(
-        start_date=start_date,
-        end_date=end_date,
-        limit=1000,
-    )
+    try:
+        raw = await mm.get_transactions(
+            start_date=start_date,
+            end_date=end_date,
+            limit=1000,
+        )
+    except Exception as e:
+        if "401" in str(e) or "unauthorized" in str(e).lower():
+            _invalidate_client()
+        raise
 
     transactions = []
     for t in raw.get("allTransactions", {}).get("results", []):
@@ -59,12 +86,17 @@ async def get_transactions(days: int = 30) -> list[Transaction]:
     return transactions
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=5, max=60))
 async def get_accounts() -> list[Account]:
-    mm = _get_monarch_client()
-    await _ensure_authenticated(mm)
+    mm = await _get_client()
 
-    raw = await mm.get_accounts()
+    try:
+        raw = await mm.get_accounts()
+    except Exception as e:
+        if "401" in str(e) or "unauthorized" in str(e).lower():
+            _invalidate_client()
+        raise
+
     accounts = []
     for a in raw.get("accounts", []):
         try:
@@ -84,12 +116,17 @@ async def get_accounts() -> list[Account]:
     return accounts
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=5, max=60))
 async def get_budgets() -> list[Budget]:
-    mm = _get_monarch_client()
-    await _ensure_authenticated(mm)
+    mm = await _get_client()
 
-    raw = await mm.get_budgets()
+    try:
+        raw = await mm.get_budgets()
+    except Exception as e:
+        if "401" in str(e) or "unauthorized" in str(e).lower():
+            _invalidate_client()
+        raise
+
     budgets = []
     for b in raw.get("budgets", []):
         try:
@@ -113,17 +150,22 @@ async def get_budgets() -> list[Budget]:
     return budgets
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=5, max=60))
 async def get_cashflow(months: int = 3) -> list[CashflowMonth]:
-    mm = _get_monarch_client()
-    await _ensure_authenticated(mm)
+    mm = await _get_client()
 
     now = datetime.now()
     start = datetime(now.year, now.month, 1) - timedelta(days=30 * (months - 1))
     start_date = start.strftime("%Y-%m-%d")
     end_date = now.strftime("%Y-%m-%d")
 
-    raw = await mm.get_cashflow(start_date=start_date, end_date=end_date)
+    try:
+        raw = await mm.get_cashflow(start_date=start_date, end_date=end_date)
+    except Exception as e:
+        if "401" in str(e) or "unauthorized" in str(e).lower():
+            _invalidate_client()
+        raise
+
     cashflow = []
     for entry in raw.get("summary", []):
         try:
@@ -147,17 +189,22 @@ async def get_cashflow(months: int = 3) -> list[CashflowMonth]:
     return cashflow
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=5, max=60))
 async def get_net_worth_history(months: int = 6) -> list[NetWorthSnapshot]:
-    mm = _get_monarch_client()
-    await _ensure_authenticated(mm)
+    mm = await _get_client()
 
     now = datetime.now()
     start = datetime(now.year, now.month, 1) - timedelta(days=30 * (months - 1))
     start_date = start.strftime("%Y-%m-%d")
     end_date = now.strftime("%Y-%m-%d")
 
-    raw = await mm.get_net_worth(start_date=start_date, end_date=end_date)
+    try:
+        raw = await mm.get_net_worth(start_date=start_date, end_date=end_date)
+    except Exception as e:
+        if "401" in str(e) or "unauthorized" in str(e).lower():
+            _invalidate_client()
+        raise
+
     snapshots = []
     for entry in raw.get("netWorthTimeseries", []):
         try:

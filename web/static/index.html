@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinancialAdvisor — Job Manager</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f1117; color: #e2e8f0; display: flex; height: 100vh; overflow: hidden; }
+
+  /* Sidebar */
+  #sidebar { width: 220px; background: #1a1d27; border-right: 1px solid #2d3148; display: flex; flex-direction: column; flex-shrink: 0; }
+  #sidebar h1 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #7c83a0; padding: 20px 16px 12px; border-bottom: 1px solid #2d3148; }
+  #job-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+  .job-item { padding: 10px 16px; cursor: pointer; border-left: 3px solid transparent; transition: background .15s; font-size: 14px; }
+  .job-item:hover { background: #22253a; }
+  .job-item.active { background: #22253a; border-left-color: #6366f1; color: #a5b4fc; }
+  .job-next { font-size: 11px; color: #5a6080; margin-top: 2px; }
+
+  /* Main panel */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #header { padding: 20px 28px 0; border-bottom: 1px solid #2d3148; }
+  #header h2 { font-size: 20px; font-weight: 600; }
+  #header .next { font-size: 12px; color: #7c83a0; margin-top: 4px; margin-bottom: 12px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; margin-top: 12px; }
+  .tab { padding: 8px 20px; font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; color: #7c83a0; transition: color .15s, border-color .15s; }
+  .tab.active { color: #a5b4fc; border-bottom-color: #6366f1; }
+  .tab:hover:not(.active) { color: #c4c9e0; }
+
+  /* Content */
+  #content { flex: 1; overflow-y: auto; padding: 28px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Form */
+  .form-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+  .field label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: #7c83a0; margin-bottom: 5px; }
+  .field input { width: 100%; background: #1a1d27; border: 1px solid #2d3148; border-radius: 6px; color: #e2e8f0; padding: 8px 10px; font-size: 14px; outline: none; transition: border-color .15s; }
+  .field input:focus { border-color: #6366f1; }
+  .hint { font-size: 12px; color: #5a6080; margin-bottom: 20px; }
+
+  textarea { width: 100%; background: #1a1d27; border: 1px solid #2d3148; border-radius: 6px; color: #e2e8f0; padding: 12px; font-size: 13px; font-family: "SF Mono", "Fira Code", monospace; line-height: 1.6; resize: vertical; min-height: 320px; outline: none; transition: border-color .15s; }
+  textarea:focus { border-color: #6366f1; }
+
+  .prompt-hint { font-size: 12px; color: #f59e0b; background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); border-radius: 6px; padding: 8px 12px; margin-bottom: 14px; }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  button { padding: 8px 18px; border-radius: 6px; border: none; font-size: 14px; cursor: pointer; font-weight: 500; transition: opacity .15s; }
+  button:hover { opacity: .85; }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-secondary { background: #2d3148; color: #c4c9e0; }
+  .btn-danger { background: #dc2626; color: #fff; }
+  .btn-run { background: #059669; color: #fff; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* Override badge */
+  .badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }
+  .badge-override { background: rgba(99,102,241,.25); color: #a5b4fc; }
+  .badge-default { background: rgba(90,96,128,.2); color: #7c83a0; }
+
+  /* Toast */
+  #toast { position: fixed; bottom: 24px; right: 24px; background: #22253a; border: 1px solid #2d3148; border-radius: 8px; padding: 12px 18px; font-size: 14px; opacity: 0; transform: translateY(8px); transition: opacity .25s, transform .25s; pointer-events: none; z-index: 100; max-width: 320px; }
+  #toast.show { opacity: 1; transform: translateY(0); }
+  #toast.error { border-color: #dc2626; color: #fca5a5; }
+  #toast.success { border-color: #059669; color: #6ee7b7; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>Jobs</h1>
+  <div id="job-list"></div>
+</div>
+
+<div id="main">
+  <div id="header">
+    <h2 id="job-title">Select a job</h2>
+    <div class="next" id="job-next"></div>
+    <div class="tabs" id="tabs" style="display:none">
+      <div class="tab active" data-tab="schedule">Schedule</div>
+      <div class="tab" data-tab="prompt" id="prompt-tab">Prompt</div>
+    </div>
+  </div>
+  <div id="content">
+    <div class="panel active" id="panel-schedule">
+      <p style="color:#5a6080;font-size:14px">Select a job from the sidebar.</p>
+    </div>
+    <div class="panel" id="panel-prompt"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const JOBS_WITH_PROMPTS = new Set(["daily_digest","anomaly_check","weekly_report","monthly_review"]);
+let currentJob = null;
+
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ detail: r.statusText }));
+    throw new Error(err.detail || r.statusText);
+  }
+  return r.status === 204 ? null : r.json();
+}
+
+function toast(msg, type = "success") {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = ""; }, 3200);
+}
+
+function fmtNext(iso) {
+  if (!iso) return "Not scheduled";
+  const d = new Date(iso);
+  return "Next run: " + d.toLocaleString();
+}
+
+async function loadJobs() {
+  const jobs = await api("GET", "/api/jobs");
+  const list = document.getElementById("job-list");
+  list.innerHTML = "";
+  for (const j of jobs) {
+    const el = document.createElement("div");
+    el.className = "job-item";
+    el.dataset.id = j.id;
+    el.innerHTML = `<div>${j.name}</div><div class="job-next">${fmtNext(j.next_run_time)}</div>`;
+    el.onclick = () => selectJob(j.id);
+    list.appendChild(el);
+  }
+}
+
+async function selectJob(jobId) {
+  currentJob = jobId;
+
+  document.querySelectorAll(".job-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.id === jobId);
+  });
+
+  const jobs = await api("GET", "/api/jobs");
+  const job = jobs.find(j => j.id === jobId);
+  document.getElementById("job-title").textContent = job.name;
+  document.getElementById("job-next").textContent = fmtNext(job.next_run_time);
+
+  const tabs = document.getElementById("tabs");
+  const promptTab = document.getElementById("prompt-tab");
+  tabs.style.display = "flex";
+  if (JOBS_WITH_PROMPTS.has(jobId)) {
+    promptTab.style.display = "";
+  } else {
+    promptTab.style.display = "none";
+    // ensure schedule tab is active
+    activateTab("schedule");
+  }
+
+  await renderSchedulePanel(jobId);
+  if (JOBS_WITH_PROMPTS.has(jobId)) await renderPromptPanel(jobId);
+}
+
+async function renderSchedulePanel(jobId) {
+  const { cron, is_override } = await api("GET", `/api/jobs/${jobId}/schedule`);
+  const badgeHtml = is_override
+    ? '<span class="badge badge-override">custom</span>'
+    : '<span class="badge badge-default">default</span>';
+
+  document.getElementById("panel-schedule").innerHTML = `
+    <h3 style="margin-bottom:16px;font-size:16px">Cron Schedule ${badgeHtml}</h3>
+    <div class="form-row">
+      ${["minute","hour","day","month","day_of_week"].map(f => `
+        <div class="field">
+          <label>${f.replace("_"," ")}</label>
+          <input id="cron-${f}" value="${cron[f] ?? "*"}">
+        </div>`).join("")}
+    </div>
+    <p class="hint">Standard cron syntax. Use * for any, */n for every n, comma-separated values, or ranges (e.g. 1-5).</p>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="saveSchedule()">Save Schedule</button>
+      <button class="btn-run" onclick="triggerJob()">Run Now</button>
+    </div>
+  `;
+}
+
+async function renderPromptPanel(jobId) {
+  const { system_prompt, is_override } = await api("GET", `/api/jobs/${jobId}/prompt`);
+  const badgeHtml = is_override
+    ? '<span class="badge badge-override">custom</span>'
+    : '<span class="badge badge-default">default</span>';
+
+  document.getElementById("panel-prompt").innerHTML = `
+    <h3 style="margin-bottom:12px;font-size:16px">System Prompt ${badgeHtml}</h3>
+    <p class="prompt-hint">⚠️ Runtime placeholders like <code>{date}</code> and <code>{month}</code> are filled in automatically — keep them in your prompt.</p>
+    <textarea id="prompt-text">${escHtml(system_prompt)}</textarea>
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn-primary" onclick="savePrompt()">Save Prompt</button>
+      <button class="btn-danger" onclick="resetPrompt()">Reset to Default</button>
+    </div>
+  `;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// Tab switching
+document.getElementById("tabs").addEventListener("click", e => {
+  const tab = e.target.closest(".tab");
+  if (!tab) return;
+  activateTab(tab.dataset.tab);
+});
+
+function activateTab(name) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === `panel-${name}`));
+}
+
+async function saveSchedule() {
+  if (!currentJob) return;
+  const fields = {};
+  for (const f of ["minute","hour","day","month","day_of_week"]) {
+    fields[f] = document.getElementById(`cron-${f}`).value.trim();
+  }
+  try {
+    const res = await api("PUT", `/api/jobs/${currentJob}/schedule`, fields);
+    toast(`Schedule saved. Next run: ${res.next_run_time ? new Date(res.next_run_time).toLocaleString() : "unknown"}`);
+    await loadJobs();
+    // refresh next run display
+    document.getElementById("job-next").textContent = fmtNext(res.next_run_time);
+    await renderSchedulePanel(currentJob);
+  } catch(e) { toast(e.message, "error"); }
+}
+
+async function triggerJob() {
+  if (!currentJob) return;
+  try {
+    await api("POST", `/api/jobs/${currentJob}/trigger`);
+    toast("Job triggered — check Telegram for output.");
+  } catch(e) { toast(e.message, "error"); }
+}
+
+async function savePrompt() {
+  if (!currentJob) return;
+  const text = document.getElementById("prompt-text").value;
+  try {
+    await api("PUT", `/api/jobs/${currentJob}/prompt`, { system_prompt: text });
+    toast("Prompt saved.");
+    await renderPromptPanel(currentJob);
+  } catch(e) { toast(e.message, "error"); }
+}
+
+async function resetPrompt() {
+  if (!currentJob) return;
+  if (!confirm("Reset to default prompt?")) return;
+  try {
+    const res = await api("DELETE", `/api/jobs/${currentJob}/prompt`);
+    toast("Prompt reset to default.");
+    await renderPromptPanel(currentJob);
+  } catch(e) { toast(e.message, "error"); }
+}
+
+// Init
+loadJobs();
+setInterval(loadJobs, 30000);
+</script>
+</body>
+</html>
