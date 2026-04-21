@@ -1,0 +1,25 @@
+# Environment
+.env
+
+# Session & auth
+.monarch_session.json
+
+# Database
+data/finance.db
+
+# Logs
+*.log
+
+# Models (large GGUF files)
+models/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Docker
+.dockerignore
+
+# Claude
+.claude
