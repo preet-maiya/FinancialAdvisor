@@ -40,7 +40,12 @@ async def upsert_transactions(transactions: list[Transaction]) -> int:
     return count
 
 
-async def get_transactions(days: int = 30, income_only: bool = False, expense_only: bool = False) -> list[dict]:
+async def get_transactions(
+    days: int = 30,
+    income_only: bool = False,
+    expense_only: bool = False,
+    limit: Optional[int] = None,
+) -> list[dict]:
     since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     async with get_db() as db:
         query = "SELECT * FROM transactions WHERE date >= ?"
@@ -50,6 +55,9 @@ async def get_transactions(days: int = 30, income_only: bool = False, expense_on
         if expense_only:
             query += " AND is_income = 0"
         query += " ORDER BY date DESC"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
         async with db.execute(query, params) as cursor:
             rows = await cursor.fetchall()
     return [dict(r) for r in rows]
@@ -197,6 +205,89 @@ async def get_merchant_history(merchant: str, days: int = 90) -> list[dict]:
         ) as cursor:
             rows = await cursor.fetchall()
     return [dict(r) for r in rows]
+
+
+async def insert_job_run(
+    job_id: str,
+    job_name: str,
+    started_at: str,
+    finished_at: str,
+    duration_seconds: float,
+    status: str,
+    error: Optional[str] = None,
+) -> None:
+    async with get_db() as db:
+        await db.execute(
+            """
+            INSERT INTO job_runs (job_id, job_name, started_at, finished_at, duration_seconds, status, error)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [job_id, job_name, started_at, finished_at, duration_seconds, status, error],
+        )
+        await db.commit()
+
+
+async def get_job_runs(limit: int = 100) -> list[dict]:
+    async with get_db() as db:
+        async with db.execute(
+            "SELECT * FROM job_runs ORDER BY started_at DESC LIMIT ?", [limit]
+        ) as cursor:
+            rows = await cursor.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def create_chat_session(title: str) -> int:
+    async with get_db() as db:
+        cursor = await db.execute(
+            "INSERT INTO chat_sessions (title) VALUES (?)", [title]
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def get_chat_sessions() -> list[dict]:
+    async with get_db() as db:
+        async with db.execute(
+            """
+            SELECT s.id, s.title, s.created_at, s.updated_at,
+                   COUNT(m.id) as message_count
+            FROM chat_sessions s
+            LEFT JOIN chat_messages m ON m.session_id = s.id
+            GROUP BY s.id
+            ORDER BY s.updated_at DESC
+            """
+        ) as cursor:
+            rows = await cursor.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def get_chat_messages(session_id: int) -> list[dict]:
+    async with get_db() as db:
+        async with db.execute(
+            "SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at",
+            [session_id],
+        ) as cursor:
+            rows = await cursor.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def add_chat_message(session_id: int, role: str, content: str) -> None:
+    async with get_db() as db:
+        await db.execute(
+            "INSERT INTO chat_messages (session_id, role, content) VALUES (?, ?, ?)",
+            [session_id, role, content],
+        )
+        await db.execute(
+            "UPDATE chat_sessions SET updated_at = datetime('now') WHERE id = ?",
+            [session_id],
+        )
+        await db.commit()
+
+
+async def delete_chat_session(session_id: int) -> None:
+    async with get_db() as db:
+        await db.execute("DELETE FROM chat_sessions WHERE id = ?", [session_id])
+        await db.commit()
 
 
 async def compute_and_update_baselines() -> None:

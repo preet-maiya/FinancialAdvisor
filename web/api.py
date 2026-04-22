@@ -72,6 +72,18 @@ async def index():
     return FileResponse(STATIC_DIR / "index.html")
 
 
+@app.get("/api/job-runs")
+async def list_job_runs(limit: int = 100):
+    from storage.repository import get_job_runs
+    return await get_job_runs(limit=limit)
+
+
+@app.get("/api/jobs/running")
+async def get_running_jobs():
+    import job_state
+    return job_state.get_running()
+
+
 @app.get("/api/jobs")
 async def list_jobs():
     jobs = []
@@ -158,6 +170,58 @@ async def reset_prompt(job_id: str):
         raise HTTPException(status_code=404, detail="Job has no prompt")
     await delete_prompt_override(job_id)
     return {"ok": True, "system_prompt": PROMPT_DEFAULTS[job_id]}
+
+
+CHAT_SYSTEM = (
+    "You are a personal financial advisor with access to the user's real financial data. "
+    "Answer questions about their spending, budgets, savings, net worth, subscriptions, and transactions. "
+    "Be specific and use actual numbers from the data. Be concise and helpful."
+)
+
+
+class ChatBody(BaseModel):
+    message: str
+    session_id: int | None = None
+
+
+@app.get("/api/chat/sessions")
+async def list_chat_sessions():
+    from storage.repository import get_chat_sessions
+    return await get_chat_sessions()
+
+
+@app.get("/api/chat/sessions/{session_id}")
+async def get_session_messages(session_id: int):
+    from storage.repository import get_chat_messages
+    return await get_chat_messages(session_id)
+
+
+@app.delete("/api/chat/sessions/{session_id}", status_code=204)
+async def delete_session(session_id: int):
+    from storage.repository import delete_chat_session
+    await delete_chat_session(session_id)
+
+
+@app.post("/api/chat")
+async def chat(body: ChatBody):
+    from agent.react import run_react
+    from agent.llm import get_llm
+    from agent.tools import ALL_TOOLS
+    from storage.repository import create_chat_session, add_chat_message, get_chat_messages
+
+    session_id = body.session_id
+    if session_id is None:
+        title = body.message[:60] + ("…" if len(body.message) > 60 else "")
+        session_id = await create_chat_session(title)
+
+    history = await get_chat_messages(session_id)
+    await add_chat_message(session_id, "user", body.message)
+
+    prior = [{"role": m["role"], "content": m["content"]} for m in history]
+    reply = await run_react(get_llm(), ALL_TOOLS, CHAT_SYSTEM, body.message, history=prior)
+    await add_chat_message(session_id, "assistant", reply)
+
+    return {"reply": reply, "session_id": session_id}
 
 
 @app.post("/api/jobs/{job_id}/trigger", status_code=202)

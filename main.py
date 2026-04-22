@@ -9,8 +9,7 @@ import uvicorn
 
 import config  # noqa: F401 — loads env and configures logging
 from storage.database import init_db
-from data.fetcher import get_transactions, get_accounts
-from notifications.telegram import send_startup_message, send_message
+from data.fetcher import get_transactions
 import storage.repository as repo
 from scheduler.jobs import (
     job_daily_digest,
@@ -42,23 +41,6 @@ async def startup() -> None:
     except Exception as e:
         logger.error(f"Initial sync failed: {e}\n{traceback.format_exc()}")
 
-    # 3. Build account summary for startup message
-    summary_lines = []
-    try:
-        accounts = await get_accounts()
-        total_assets = sum(a.balance for a in accounts if a.balance > 0)
-        total_liabilities = abs(sum(a.balance for a in accounts if a.balance < 0))
-        net_worth = total_assets - total_liabilities
-        summary_lines.append(f"💳 Accounts synced: {len(accounts)}")
-        summary_lines.append(f"🏦 Total assets: ${total_assets:,.2f}")
-        summary_lines.append(f"💳 Total liabilities: ${total_liabilities:,.2f}")
-        summary_lines.append(f"📈 Net worth: ${net_worth:,.2f}")
-    except Exception as e:
-        logger.error(f"Failed to fetch account summary: {e}")
-        summary_lines.append("_(Could not fetch account summary)_")
-
-    # 4. Send startup notification
-    await send_startup_message("\n".join(summary_lines))
     logger.info("Startup complete.")
 
 

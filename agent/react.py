@@ -70,6 +70,7 @@ async def run_react(
     tools: list[BaseTool],
     system_prompt: str,
     user_message: str,
+    history: list[dict] | None = None,
 ) -> str:
     tool_map = {t.name: t for t in tools}
     tool_descriptions = _build_tool_descriptions(tools)
@@ -78,8 +79,17 @@ async def run_react(
         system_prompt=system_prompt,
         tool_descriptions=tool_descriptions,
     )
+
+    prior = []
+    for msg in (history or []):
+        if msg["role"] == "user":
+            prior.append(HumanMessage(content=msg["content"]))
+        elif msg["role"] == "assistant":
+            prior.append(AIMessage(content=msg["content"]))
+
     messages: list = [
         SystemMessage(content=system),
+        *prior,
         HumanMessage(content=user_message),
     ]
 

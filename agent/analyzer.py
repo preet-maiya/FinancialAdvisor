@@ -106,10 +106,14 @@ async def monthly_review() -> AnalysisResult:
     )
     result = await _run_analysis("monthly_review", system, message)
 
-    match = re.search(r"(\d+(?:\.\d+)?)/10", result.raw_response)
-    if match:
-        result.score = float(match.group(1))
+    if not result.summary.startswith("Analysis failed"):
+        match = re.search(r"(\d+(?:\.\d+)?)/10", result.raw_response)
+        if match:
+            result.score = float(match.group(1))
 
     await repo.save_analysis_result(result)
-    logger.info("Monthly review complete.")
+    if result.summary.startswith("Analysis failed"):
+        logger.error("Monthly review did not complete: %s", result.summary)
+    else:
+        logger.info("Monthly review complete.")
     return result

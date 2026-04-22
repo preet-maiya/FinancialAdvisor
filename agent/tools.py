@@ -201,6 +201,22 @@ async def get_income_trend(months: int = 3) -> str:
     return "\n".join(lines)
 
 
+@tool
+async def get_recent_transactions(limit: int = 20, days: int = 30) -> str:
+    """Get the most recent N individual transactions from the last M days, ordered newest first."""
+    rows = await repo.get_transactions(days=days, limit=limit)
+    if not rows:
+        return f"No transactions found in the last {days} days."
+    lines = [f"Last {len(rows)} transactions (past {days} days):"]
+    for t in rows:
+        kind = "income" if t["is_income"] else "expense"
+        notes = f" — {t['notes']}" if t.get("notes") else ""
+        lines.append(
+            f"  {t['date']}  {t['merchant']:<30}  ${t['amount']:>8.2f}  [{t['category']}] ({kind}){notes}"
+        )
+    return "\n".join(lines)
+
+
 ALL_TOOLS = [
     get_spending_by_category,
     get_top_merchants,
@@ -211,4 +227,5 @@ ALL_TOOLS = [
     get_net_worth_trend,
     get_anomalies,
     get_income_trend,
+    get_recent_transactions,
 ]

@@ -56,6 +56,74 @@
   .btn-run { background: #059669; color: #fff; }
   button:disabled { opacity: .45; cursor: not-allowed; }
 
+  /* Running job indicator */
+  .job-item .run-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #10b981; margin-left: 6px; vertical-align: middle; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  .job-item .run-elapsed { font-size: 10px; color: #10b981; margin-top: 2px; }
+  .badge-running { background: rgba(16,185,129,.2); color: #6ee7b7; border: 1px solid rgba(16,185,129,.4); border-radius: 20px; font-size: 11px; padding: 2px 8px; margin-left: 8px; vertical-align: middle; animation: pulse 1.4s ease-in-out infinite; }
+
+  /* Sidebar nav links (Chat, Runs) */
+  .nav-link { padding: 10px 16px; cursor: pointer; border-left: 3px solid transparent; font-size: 14px; color: #7c83a0; border-top: 1px solid #2d3148; transition: background .15s; }
+  .nav-link:hover { background: #22253a; color: #c4c9e0; }
+  .nav-link.active { background: #22253a; border-left-color: #6366f1; color: #a5b4fc; }
+
+  /* Job Runs view */
+  #runs-view { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  #runs-view.active { display: flex; }
+  #runs-header { padding: 20px 28px 16px; border-bottom: 1px solid #2d3148; display: flex; align-items: center; gap: 16px; }
+  #runs-header h2 { font-size: 20px; font-weight: 600; flex: 1; }
+  #runs-body { flex: 1; overflow-y: auto; padding: 24px 28px; }
+  .runs-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .runs-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: #7c83a0; padding: 0 12px 10px; border-bottom: 1px solid #2d3148; }
+  .runs-table td { padding: 10px 12px; border-bottom: 1px solid #1e2135; vertical-align: top; }
+  .runs-table tr:last-child td { border-bottom: none; }
+  .runs-table tr:hover td { background: #181b28; }
+  .status-success { color: #6ee7b7; font-weight: 500; }
+  .status-error { color: #fca5a5; font-weight: 500; }
+  .status-running { color: #fcd34d; font-weight: 500; animation: pulse 1.4s ease-in-out infinite; }
+  .error-cell { color: #f87171; font-size: 12px; max-width: 320px; word-break: break-word; }
+  .runs-empty { color: #5a6080; font-size: 14px; padding: 40px 0; text-align: center; }
+
+  /* Chat view */
+  #chat-view { display: none; flex: 1; overflow: hidden; }
+  #chat-view.active { display: flex; }
+
+  /* Session list panel */
+  #session-panel { width: 200px; background: #13151f; border-right: 1px solid #2d3148; display: flex; flex-direction: column; flex-shrink: 0; }
+  #session-panel-header { padding: 14px 12px 10px; border-bottom: 1px solid #2d3148; display: flex; align-items: center; gap: 8px; }
+  #session-panel-header span { font-size: 12px; font-weight: 600; color: #7c83a0; text-transform: uppercase; letter-spacing: .07em; flex: 1; }
+  #new-chat-btn { font-size: 18px; background: none; border: none; color: #6366f1; cursor: pointer; padding: 0 2px; line-height: 1; }
+  #new-chat-btn:hover { color: #a5b4fc; opacity: 1; }
+  #session-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+  .session-item { padding: 9px 12px; cursor: pointer; border-left: 3px solid transparent; font-size: 12px; color: #9ca3b8; transition: background .15s; display: flex; align-items: flex-start; gap: 6px; }
+  .session-item:hover { background: #1a1d27; }
+  .session-item.active { background: #1a1d27; border-left-color: #6366f1; color: #c4c9e0; }
+  .session-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .session-date { font-size: 10px; color: #5a6080; margin-top: 2px; }
+  .session-del { opacity: 0; font-size: 13px; color: #5a6080; cursor: pointer; padding: 0 2px; flex-shrink: 0; }
+  .session-item:hover .session-del { opacity: 1; }
+  .session-del:hover { color: #f87171; }
+
+  /* Conversation panel */
+  #convo-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #chat-header { padding: 16px 24px 14px; border-bottom: 1px solid #2d3148; }
+  #chat-header h2 { font-size: 18px; font-weight: 600; }
+  #chat-header p { font-size: 12px; color: #7c83a0; margin-top: 3px; }
+  #chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; }
+  .chat-msg { display: flex; flex-direction: column; max-width: 82%; }
+  .chat-msg.user { align-self: flex-end; align-items: flex-end; }
+  .chat-msg.assistant { align-self: flex-start; align-items: flex-start; }
+  .chat-bubble { padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+  .chat-msg.user .chat-bubble { background: #6366f1; color: #fff; border-bottom-right-radius: 3px; }
+  .chat-msg.assistant .chat-bubble { background: #1a1d27; border: 1px solid #2d3148; color: #e2e8f0; border-bottom-left-radius: 3px; }
+  .chat-label { font-size: 11px; color: #5a6080; margin-bottom: 4px; }
+  #chat-input-row { display: flex; gap: 10px; padding: 14px 24px; border-top: 1px solid #2d3148; }
+  #chat-input { flex: 1; background: #1a1d27; border: 1px solid #2d3148; border-radius: 8px; color: #e2e8f0; padding: 10px 14px; font-size: 14px; outline: none; resize: none; font-family: inherit; line-height: 1.5; max-height: 120px; transition: border-color .15s; }
+  #chat-input:focus { border-color: #6366f1; }
+  #chat-send { align-self: flex-end; padding: 10px 20px; }
+  .thinking { color: #7c83a0; font-style: italic; font-size: 13px; }
+  .chat-empty { color: #5a6080; font-size: 14px; text-align: center; margin: auto; padding: 40px; }
+
   /* Override badge */
   .badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }
   .badge-override { background: rgba(99,102,241,.25); color: #a5b4fc; }
@@ -73,22 +141,64 @@
 <div id="sidebar">
   <h1>Jobs</h1>
   <div id="job-list"></div>
+  <div id="chat-link" class="nav-link" onclick="openChat()">Chat with Advisor</div>
+  <div id="runs-link" class="nav-link" onclick="openRuns()">Job Runs</div>
 </div>
 
 <div id="main">
-  <div id="header">
-    <h2 id="job-title">Select a job</h2>
-    <div class="next" id="job-next"></div>
-    <div class="tabs" id="tabs" style="display:none">
-      <div class="tab active" data-tab="schedule">Schedule</div>
-      <div class="tab" data-tab="prompt" id="prompt-tab">Prompt</div>
+  <!-- Job view -->
+  <div id="job-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+    <div id="header">
+      <h2 id="job-title">Select a job</h2>
+      <div class="next" id="job-next"></div>
+      <div class="tabs" id="tabs" style="display:none">
+        <div class="tab active" data-tab="schedule">Schedule</div>
+        <div class="tab" data-tab="prompt" id="prompt-tab">Prompt</div>
+      </div>
+    </div>
+    <div id="content">
+      <div class="panel active" id="panel-schedule">
+        <p style="color:#5a6080;font-size:14px">Select a job from the sidebar.</p>
+      </div>
+      <div class="panel" id="panel-prompt"></div>
     </div>
   </div>
-  <div id="content">
-    <div class="panel active" id="panel-schedule">
-      <p style="color:#5a6080;font-size:14px">Select a job from the sidebar.</p>
+
+  <!-- Job Runs view -->
+  <div id="runs-view">
+    <div id="runs-header">
+      <h2>Job Runs</h2>
+      <button class="btn-secondary" onclick="loadRuns()" style="padding:6px 14px;font-size:13px">Refresh</button>
     </div>
-    <div class="panel" id="panel-prompt"></div>
+    <div id="runs-body">
+      <p class="runs-empty">Loading…</p>
+    </div>
+  </div>
+
+  <!-- Chat view -->
+  <div id="chat-view">
+    <!-- Session list -->
+    <div id="session-panel">
+      <div id="session-panel-header">
+        <span>History</span>
+        <button id="new-chat-btn" title="New chat" onclick="newChat()">+</button>
+      </div>
+      <div id="session-list"></div>
+    </div>
+    <!-- Conversation -->
+    <div id="convo-panel">
+      <div id="chat-header">
+        <h2>Financial Advisor</h2>
+        <p>Ask anything about your spending, budgets, savings, or transactions.</p>
+      </div>
+      <div id="chat-messages">
+        <p class="chat-empty">Select a conversation or start a new one.</p>
+      </div>
+      <div id="chat-input-row">
+        <textarea id="chat-input" rows="1" placeholder="Ask about your finances…"></textarea>
+        <button class="btn-primary" id="chat-send" onclick="sendChat()">Send</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -141,7 +251,9 @@ async function loadJobs() {
 }
 
 async function selectJob(jobId) {
+  _deactivateAll();
   currentJob = jobId;
+  document.getElementById("job-view").style.display = "flex";
 
   document.querySelectorAll(".job-item").forEach(el => {
     el.classList.toggle("active", el.dataset.id === jobId);
@@ -267,9 +379,279 @@ async function resetPrompt() {
   } catch(e) { toast(e.message, "error"); }
 }
 
+// ── Running job tracking ─────────────────────────────────────────────────────
+
+let _runningJobs = {};
+
+function elapsed(isoStart) {
+  const secs = Math.floor((Date.now() - new Date(isoStart)) / 1000);
+  if (secs < 60) return `${secs}s`;
+  const m = Math.floor(secs / 60), s = secs % 60;
+  return `${m}m ${s}s`;
+}
+
+async function pollRunning() {
+  try {
+    _runningJobs = await api("GET", "/api/jobs/running");
+  } catch (_) {
+    _runningJobs = {};
+  }
+  updateRunningIndicators();
+}
+
+function updateRunningIndicators() {
+  // Sidebar dots
+  document.querySelectorAll(".job-item").forEach(el => {
+    const jobId = el.dataset.id;
+    const startedAt = _runningJobs[jobId];
+    let dot = el.querySelector(".run-dot");
+    let elapsedEl = el.querySelector(".run-elapsed");
+
+    if (startedAt) {
+      if (!dot) {
+        dot = document.createElement("span");
+        dot.className = "run-dot";
+        el.querySelector("div").appendChild(dot);
+      }
+      if (!elapsedEl) {
+        elapsedEl = document.createElement("div");
+        elapsedEl.className = "run-elapsed";
+        el.appendChild(elapsedEl);
+      }
+      elapsedEl.textContent = "Running " + elapsed(startedAt);
+    } else {
+      dot?.remove();
+      elapsedEl?.remove();
+    }
+  });
+
+  // Header badge for selected job
+  const badge = document.getElementById("running-badge");
+  const startedAt = currentJob ? _runningJobs[currentJob] : null;
+  if (startedAt) {
+    if (badge) {
+      badge.textContent = "Running " + elapsed(startedAt);
+    } else {
+      const h2 = document.getElementById("job-title");
+      const b = document.createElement("span");
+      b.id = "running-badge";
+      b.className = "badge-running";
+      b.textContent = "Running " + elapsed(startedAt);
+      h2.insertAdjacentElement("afterend", b);
+    }
+  } else {
+    badge?.remove();
+  }
+}
+
 // Init
 loadJobs();
 setInterval(loadJobs, 30000);
+pollRunning();
+setInterval(pollRunning, 3000);
+// Refresh elapsed text every second without re-fetching
+setInterval(updateRunningIndicators, 1000);
+
+// ── View switching helpers ───────────────────────────────────────────────────
+
+function _deactivateAll() {
+  document.querySelectorAll(".job-item").forEach(el => el.classList.remove("active"));
+  document.querySelectorAll(".nav-link").forEach(el => el.classList.remove("active"));
+  document.getElementById("job-view").style.display = "none";
+  document.getElementById("chat-view").classList.remove("active");
+  document.getElementById("runs-view").classList.remove("active");
+  currentJob = null;
+}
+
+// ── Chat ────────────────────────────────────────────────────────────────────
+
+let currentSessionId = null;
+
+function openChat() {
+  _deactivateAll();
+  document.getElementById("chat-link").classList.add("active");
+  document.getElementById("chat-view").classList.add("active");
+  loadSessions();
+  document.getElementById("chat-input").focus();
+}
+
+function newChat() {
+  currentSessionId = null;
+  document.querySelectorAll(".session-item").forEach(el => el.classList.remove("active"));
+  document.getElementById("chat-messages").innerHTML = '<p class="chat-empty">Start typing to begin a new conversation.</p>';
+}
+
+async function loadSessions() {
+  const list = document.getElementById("session-list");
+  try {
+    const sessions = await api("GET", "/api/chat/sessions");
+    if (!sessions.length) {
+      list.innerHTML = '<p style="font-size:12px;color:#5a6080;padding:12px">No conversations yet.</p>';
+      return;
+    }
+    list.innerHTML = sessions.map(s => `
+      <div class="session-item${s.id === currentSessionId ? " active" : ""}" data-id="${s.id}" onclick="loadSession(${s.id})">
+        <div style="flex:1;min-width:0">
+          <div class="session-title">${escHtml(s.title)}</div>
+          <div class="session-date">${new Date(s.created_at).toLocaleDateString()}</div>
+        </div>
+        <span class="session-del" title="Delete" onclick="deleteSession(event,${s.id})">✕</span>
+      </div>`).join("");
+  } catch(e) {
+    list.innerHTML = `<p style="font-size:12px;color:#f87171;padding:12px">${e.message}</p>`;
+  }
+}
+
+async function loadSession(sessionId) {
+  currentSessionId = sessionId;
+  document.querySelectorAll(".session-item").forEach(el =>
+    el.classList.toggle("active", Number(el.dataset.id) === sessionId));
+
+  const container = document.getElementById("chat-messages");
+  container.innerHTML = "";
+  try {
+    const messages = await api("GET", `/api/chat/sessions/${sessionId}`);
+    if (!messages.length) {
+      container.innerHTML = '<p class="chat-empty">No messages in this conversation.</p>';
+      return;
+    }
+    messages.forEach(m => appendMessage(m.role, m.content));
+  } catch(e) {
+    container.innerHTML = `<p class="chat-empty">Failed to load: ${e.message}</p>`;
+  }
+}
+
+async function deleteSession(event, sessionId) {
+  event.stopPropagation();
+  if (!confirm("Delete this conversation?")) return;
+  try {
+    await api("DELETE", `/api/chat/sessions/${sessionId}`);
+    if (currentSessionId === sessionId) {
+      currentSessionId = null;
+      document.getElementById("chat-messages").innerHTML = '<p class="chat-empty">Select a conversation or start a new one.</p>';
+    }
+    await loadSessions();
+  } catch(e) { toast(e.message, "error"); }
+}
+
+// ── Job Runs ─────────────────────────────────────────────────────────────────
+
+function openRuns() {
+  _deactivateAll();
+  document.getElementById("runs-link").classList.add("active");
+  document.getElementById("runs-view").classList.add("active");
+  loadRuns();
+}
+
+function fmtDuration(secs) {
+  if (secs == null) return "—";
+  if (secs < 60) return secs.toFixed(1) + "s";
+  const m = Math.floor(secs / 60), s = Math.round(secs % 60);
+  return `${m}m ${s}s`;
+}
+
+function fmtDatetime(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString();
+}
+
+async function loadRuns() {
+  const body = document.getElementById("runs-body");
+  try {
+    const runs = await api("GET", "/api/job-runs?limit=100");
+    if (!runs.length) {
+      body.innerHTML = '<p class="runs-empty">No job runs recorded yet.</p>';
+      return;
+    }
+    body.innerHTML = `
+      <table class="runs-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Job</th>
+            <th>Started</th>
+            <th>Duration</th>
+            <th>Status</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${runs.map(r => `
+            <tr>
+              <td style="color:#5a6080">${r.id}</td>
+              <td>${r.job_name}</td>
+              <td style="white-space:nowrap">${fmtDatetime(r.started_at)}</td>
+              <td style="white-space:nowrap">${fmtDuration(r.duration_seconds)}</td>
+              <td class="status-${r.status}">${r.status}</td>
+              <td class="error-cell">${r.error ? escHtml(r.error) : ''}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`;
+  } catch(e) {
+    body.innerHTML = `<p class="runs-empty">Failed to load runs: ${e.message}</p>`;
+  }
+}
+
+function appendMessage(role, text) {
+  const container = document.getElementById("chat-messages");
+  const empty = container.querySelector(".chat-empty");
+  if (empty) empty.remove();
+  const wrap = document.createElement("div");
+  wrap.className = `chat-msg ${role}`;
+  const label = document.createElement("div");
+  label.className = "chat-label";
+  label.textContent = role === "user" ? "You" : "Advisor";
+  const bubble = document.createElement("div");
+  bubble.className = "chat-bubble";
+  bubble.textContent = text;
+  wrap.appendChild(label);
+  wrap.appendChild(bubble);
+  container.appendChild(wrap);
+  container.scrollTop = container.scrollHeight;
+  return bubble;
+}
+
+async function sendChat() {
+  const input = document.getElementById("chat-input");
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  input.value = "";
+  input.style.height = "auto";
+  document.getElementById("chat-send").disabled = true;
+
+  appendMessage("user", msg);
+  const thinkingBubble = appendMessage("assistant", "Thinking…");
+  thinkingBubble.classList.add("thinking");
+
+  try {
+    const res = await api("POST", "/api/chat", { message: msg, session_id: currentSessionId });
+    thinkingBubble.classList.remove("thinking");
+    thinkingBubble.textContent = res.reply;
+    if (currentSessionId !== res.session_id) {
+      currentSessionId = res.session_id;
+      await loadSessions();
+    }
+  } catch(e) {
+    thinkingBubble.classList.remove("thinking");
+    thinkingBubble.textContent = "Error: " + e.message;
+  } finally {
+    document.getElementById("chat-send").disabled = false;
+    input.focus();
+  }
+}
+
+// Auto-resize textarea and submit on Enter (Shift+Enter for newline)
+document.getElementById("chat-input").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+});
+document.getElementById("chat-input").addEventListener("input", function() {
+  this.style.height = "auto";
+  this.style.height = Math.min(this.scrollHeight, 120) + "px";
+});
 </script>
 </body>
 </html>
