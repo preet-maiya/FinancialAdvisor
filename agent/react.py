@@ -65,6 +65,139 @@ def _build_tool_descriptions(tools: list[BaseTool]) -> str:
     return "\n".join(lines)
 
 
+async def run_react_stream(
+    llm: Any,
+    tools: list[BaseTool],
+    system_prompt: str,
+    user_message: str,
+    history: list[dict] | None = None,
+):
+    """
+    Async generator yielding dicts:
+      {"type": "tool",  "name": "..."}          – tool being called
+      {"type": "token", "text": "..."}          – streaming final-answer token
+      {"type": "reset"}                         – discard already-streamed tokens (rare)
+      {"type": "done",  "reply": "full reply"}  – stream complete
+    """
+    tool_map = {t.name: t for t in tools}
+    tool_descriptions = _build_tool_descriptions(tools)
+
+    system = _SYSTEM_PREFIX.format(
+        system_prompt=system_prompt,
+        tool_descriptions=tool_descriptions,
+    )
+
+    prior: list = []
+    for msg in (history or []):
+        if msg["role"] == "user":
+            prior.append(HumanMessage(content=msg["content"]))
+        elif msg["role"] == "assistant":
+            prior.append(AIMessage(content=msg["content"]))
+
+    messages: list = [SystemMessage(content=system), *prior, HumanMessage(content=user_message)]
+
+    tools_called = False
+    last_tool_calls: list[str] = []
+
+    for step in range(MAX_STEPS):
+        full_text = ""
+        tool_call_seen = False
+        streamed_any = False
+
+        async for chunk in llm.astream(messages):
+            token = chunk.content
+            if not token:
+                continue
+            full_text += token
+            if not tool_call_seen:
+                if "<tool_call>" in full_text:
+                    tool_call_seen = True  # stop streaming from here
+                else:
+                    yield {"type": "token", "text": token}
+                    streamed_any = True
+
+        reply = full_text
+        logger.info("[ReAct stream step %d] output: %s", step + 1, reply[:300])
+
+        tool_calls = TOOL_CALL_RE.findall(reply)
+
+        if not tool_calls:
+            if not tools_called:
+                # Model skipped tools — reset client and force a tool call
+                if streamed_any:
+                    yield {"type": "reset"}
+                first_tool = tools[0] if tools else None
+                example = (
+                    f'<tool_call>{{"name": "{first_tool.name}", "arguments": {{}}}}</tool_call>'
+                    if first_tool else ""
+                )
+                messages.append(AIMessage(content=reply))
+                messages.append(HumanMessage(content=(
+                    "STOP. You must call a tool before writing anything. "
+                    "Do NOT write any analysis or numbers yet — you have no real data. "
+                    f"Output a tool call RIGHT NOW using this exact format:\n{example}"
+                )))
+                continue
+            yield {"type": "done", "reply": reply}
+            return
+
+        tools_called = True
+
+        if tool_calls == last_tool_calls:
+            logger.warning("[ReAct stream step %d] repeated tool call, forcing final answer.", step + 1)
+            messages.append(HumanMessage(content=(
+                "You already called that tool and received the result. "
+                "Do NOT call it again. Write your final answer now based on what you have."
+            )))
+            forced_reply = ""
+            async for chunk in llm.astream(messages):
+                token = chunk.content
+                if token:
+                    forced_reply += token
+                    yield {"type": "token", "text": token}
+            yield {"type": "done", "reply": forced_reply}
+            return
+
+        last_tool_calls = tool_calls
+        messages.append(AIMessage(content=reply))
+
+        results = []
+        for raw in tool_calls:
+            try:
+                call = json.loads(raw)
+                name = call["name"]
+                args = call.get("arguments", {})
+                yield {"type": "tool", "name": name}
+                tool = tool_map.get(name)
+                if tool is None:
+                    results.append(f"Tool '{name}' not found.")
+                    continue
+                logger.debug("[ReAct stream] calling %s(%s)", name, args)
+                result = await tool.ainvoke(args)
+                results.append(f"Tool '{name}' result:\n{result}")
+            except Exception as e:
+                results.append(f"Tool call failed: {e}")
+
+        tool_results = "\n\n".join(results)
+        messages.append(HumanMessage(
+            content=f"Tool results:\n\n{tool_results}\n\nContinue. If you have enough data to answer, write your final answer now instead of calling more tools."
+        ))
+
+    logger.warning("ReAct stream loop reached max steps (%d)", MAX_STEPS)
+    messages.append(HumanMessage(content=(
+        "You have reached the maximum number of tool calls. "
+        "Based on the tool results above, write your final answer now. "
+        "Do NOT call any more tools."
+    )))
+    final_reply = ""
+    async for chunk in llm.astream(messages):
+        token = chunk.content
+        if token:
+            final_reply += token
+            yield {"type": "token", "text": token}
+    yield {"type": "done", "reply": final_reply}
+
+
 async def run_react(
     llm: Any,
     tools: list[BaseTool],
