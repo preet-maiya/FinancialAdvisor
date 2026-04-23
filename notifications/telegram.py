@@ -1,5 +1,6 @@
 import logging
 import hashlib
+import re
 from datetime import datetime
 
 import aiohttp
@@ -60,6 +61,7 @@ async def send_message(text: str, parse_mode: str = "Markdown") -> bool:
 
 
 async def send_alert(title: str, body: str, urgency: str = "normal") -> bool:
+    body = _strip_think(body)
     emoji = URGENCY_EMOJI.get(urgency, "📢")
     alert_key = hashlib.md5(f"{title}:{body}".encode()).hexdigest()
 
@@ -75,8 +77,13 @@ async def send_alert(title: str, body: str, urgency: str = "normal") -> bool:
     return success
 
 
+def _strip_think(text: str) -> str:
+    """Remove <think>...</think> blocks from LLM output before sending."""
+    return re.sub(r"<think>[\s\S]*?</think>", "", text).strip()
+
+
 async def send_digest(result: AnalysisResult) -> bool:
-    text = result.raw_response
+    text = _strip_think(result.raw_response)
     # Truncate if too long for Telegram (4096 char limit)
     if len(text) > 4000:
         text = text[:3990] + "\n\n_[truncated]_"
