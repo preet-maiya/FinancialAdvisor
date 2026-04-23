@@ -1,9 +1,10 @@
 import asyncio
+import json
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -35,22 +36,27 @@ JOB_DEFAULTS = {
     "anomaly_check":      {"minute": "0",  "hour": "*/4",  "day": "*", "month": "*", "day_of_week": "*"},
     "weekly_report":      {"minute": "0",  "hour": "19",   "day": "*", "month": "*", "day_of_week": "sun"},
     "monthly_review":     {"minute": "0",  "hour": "8",    "day": "1", "month": "*", "day_of_week": "*"},
+    "investment_tracker": {"minute": "0",  "hour": "8,13", "day": "*", "month": "*", "day_of_week": "*"},
+    "snapshot_investments":{"minute": "30","hour": "13",   "day": "*", "month": "*", "day_of_week": "*"},
     "sync_transactions":  {"minute": "30", "hour": "*/6",  "day": "*", "month": "*", "day_of_week": "*"},
 }
 
 JOB_NAMES = {
-    "daily_digest":      "Daily Digest",
-    "anomaly_check":     "Anomaly Check",
-    "weekly_report":     "Weekly Report",
-    "monthly_review":    "Monthly Review",
-    "sync_transactions": "Sync Transactions",
+    "daily_digest":        "Daily Digest",
+    "anomaly_check":       "Anomaly Check",
+    "weekly_report":       "Weekly Report",
+    "monthly_review":      "Monthly Review",
+    "investment_tracker":  "Investment Tracker",
+    "snapshot_investments":"Snapshot Investments",
+    "sync_transactions":   "Sync Transactions",
 }
 
 PROMPT_DEFAULTS = {
-    "daily_digest":   prompts.DAILY_DIGEST_SYSTEM,
-    "anomaly_check":  prompts.ANOMALY_CHECK_SYSTEM,
-    "weekly_report":  prompts.WEEKLY_REPORT_SYSTEM,
-    "monthly_review": prompts.MONTHLY_REVIEW_SYSTEM,
+    "daily_digest":       prompts.DAILY_DIGEST_SYSTEM,
+    "anomaly_check":      prompts.ANOMALY_CHECK_SYSTEM,
+    "weekly_report":      prompts.WEEKLY_REPORT_SYSTEM,
+    "monthly_review":     prompts.MONTHLY_REVIEW_SYSTEM,
+    "investment_tracker": prompts.INVESTMENT_TRACKER_SYSTEM,
 }
 
 
@@ -82,6 +88,34 @@ async def list_job_runs(limit: int = 100):
 async def get_running_jobs():
     import job_state
     return job_state.get_running()
+
+
+@app.get("/api/jobs/running/stream")
+async def stream_running_jobs(request: Request):
+    import job_state
+
+    async def event_generator():
+        q = job_state.subscribe()
+        # Send current state immediately on connect
+        yield f"data: {json.dumps(job_state.get_running())}\n\n"
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    snapshot = await asyncio.wait_for(q.get(), timeout=30)
+                    yield f"data: {json.dumps(snapshot)}\n\n"
+                except asyncio.TimeoutError:
+                    # Send a keepalive comment so the connection stays alive
+                    yield ": keepalive\n\n"
+        finally:
+            job_state.unsubscribe(q)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/api/jobs")
@@ -200,6 +234,48 @@ async def get_session_messages(session_id: int):
 async def delete_session(session_id: int):
     from storage.repository import delete_chat_session
     await delete_chat_session(session_id)
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(body: ChatBody, request: Request):
+    from agent.react import run_react_stream
+    from agent.llm import get_llm
+    from agent.tools import ALL_TOOLS
+    from storage.repository import create_chat_session, add_chat_message, get_chat_messages
+
+    session_id = body.session_id
+    if session_id is None:
+        title = body.message[:60] + ("…" if len(body.message) > 60 else "")
+        session_id = await create_chat_session(title)
+
+    history = await get_chat_messages(session_id)
+    await add_chat_message(session_id, "user", body.message)
+    prior = [{"role": m["role"], "content": m["content"]} for m in history]
+
+    async def event_generator():
+        yield f"data: {json.dumps({'type': 'session', 'session_id': session_id})}\n\n"
+        reply_parts: list[str] = []
+        try:
+            async for event in run_react_stream(get_llm(), ALL_TOOLS, CHAT_SYSTEM, body.message, history=prior):
+                if await request.is_disconnected():
+                    break
+                if event["type"] == "token":
+                    reply_parts.append(event["text"])
+                elif event["type"] == "reset":
+                    reply_parts.clear()
+                elif event["type"] == "done":
+                    full_reply = event.get("reply") or "".join(reply_parts)
+                    await add_chat_message(session_id, "assistant", full_reply)
+                yield f"data: {json.dumps(event)}\n\n"
+        except Exception as e:
+            logger.exception("Error in chat stream")
+            yield f"data: {json.dumps({'type': 'error', 'text': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/api/chat")
