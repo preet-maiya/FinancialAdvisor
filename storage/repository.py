@@ -215,14 +215,15 @@ async def insert_job_run(
     duration_seconds: float,
     status: str,
     error: Optional[str] = None,
+    trace: Optional[str] = None,
 ) -> None:
     async with get_db() as db:
         await db.execute(
             """
-            INSERT INTO job_runs (job_id, job_name, started_at, finished_at, duration_seconds, status, error)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO job_runs (job_id, job_name, started_at, finished_at, duration_seconds, status, error, trace)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            [job_id, job_name, started_at, finished_at, duration_seconds, status, error],
+            [job_id, job_name, started_at, finished_at, duration_seconds, status, error, trace],
         )
         await db.commit()
 
@@ -288,6 +289,53 @@ async def delete_chat_session(session_id: int) -> None:
     async with get_db() as db:
         await db.execute("DELETE FROM chat_sessions WHERE id = ?", [session_id])
         await db.commit()
+
+
+async def save_investment_snapshot(rows: list[dict]) -> int:
+    """Upsert daily investment snapshot rows. Each row: date, symbol, account, quantity,
+    price, prev_close, day_change, day_change_pct, position_value, day_pnl."""
+    if not rows:
+        return 0
+    async with get_db() as db:
+        count = 0
+        for r in rows:
+            await db.execute(
+                """
+                INSERT INTO daily_investment_snapshots
+                    (date, symbol, account, quantity, price, prev_close,
+                     day_change, day_change_pct, position_value, day_pnl)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(date, symbol, account) DO UPDATE SET
+                    quantity=excluded.quantity,
+                    price=excluded.price,
+                    prev_close=excluded.prev_close,
+                    day_change=excluded.day_change,
+                    day_change_pct=excluded.day_change_pct,
+                    position_value=excluded.position_value,
+                    day_pnl=excluded.day_pnl,
+                    snapshotted_at=datetime('now')
+                """,
+                [r["date"], r["symbol"], r["account"], r["quantity"],
+                 r["price"], r["prev_close"], r["day_change"], r["day_change_pct"],
+                 r["position_value"], r["day_pnl"]],
+            )
+            count += 1
+        await db.commit()
+    return count
+
+
+async def get_investment_snapshots(days: int = 30) -> list[dict]:
+    since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    async with get_db() as db:
+        async with db.execute(
+            """
+            SELECT * FROM daily_investment_snapshots
+            WHERE date >= ? ORDER BY date DESC, position_value DESC
+            """,
+            [since],
+        ) as cursor:
+            rows = await cursor.fetchall()
+    return [dict(r) for r in rows]
 
 
 async def compute_and_update_baselines() -> None:

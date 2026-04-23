@@ -1,9 +1,10 @@
 import asyncio
 import logging
+import traceback
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
-from agent.analyzer import daily_digest, anomaly_check, weekly_report, monthly_review
+from agent.analyzer import daily_digest, anomaly_check, weekly_report, monthly_review, investment_tracker, snapshot_investments
 from data.fetcher import get_transactions
 from notifications.telegram import send_digest, send_alert
 import storage.repository as repo
@@ -12,11 +13,13 @@ import job_state
 logger = logging.getLogger(__name__)
 
 JOB_NAMES = {
-    "daily_digest": "Daily Digest",
-    "anomaly_check": "Anomaly Check",
-    "weekly_report": "Weekly Report",
-    "monthly_review": "Monthly Review",
-    "sync_transactions": "Sync Transactions",
+    "daily_digest":       "Daily Digest",
+    "anomaly_check":      "Anomaly Check",
+    "weekly_report":      "Weekly Report",
+    "monthly_review":     "Monthly Review",
+    "investment_tracker": "Investment Tracker",
+    "snapshot_investments": "Snapshot Investments",
+    "sync_transactions":  "Sync Transactions",
 }
 
 
@@ -38,13 +41,15 @@ def _run_job(job_id: str, coro_factory: Callable[[], Awaitable]) -> None:
     async def _inner():
         status = "success"
         error = None
+        trace = None
         try:
             logger.info("Running %s...", job_name)
             await coro_factory()
         except Exception as e:
             status = "error"
             error = str(e)
-            logger.error("%s failed: %s", job_name, e)
+            trace = traceback.format_exc()
+            logger.error("%s failed: %s\n%s", job_name, e, trace)
         finally:
             finished_at = datetime.now(timezone.utc)
             duration = (finished_at - started_at).total_seconds()
@@ -56,6 +61,7 @@ def _run_job(job_id: str, coro_factory: Callable[[], Awaitable]) -> None:
                 duration_seconds=duration,
                 status=status,
                 error=error,
+                trace=trace,
             )
 
     try:
@@ -94,6 +100,20 @@ def job_monthly_review():
         result = await monthly_review()
         await send_digest(result)
     _run_job("monthly_review", _work)
+
+
+def job_investment_tracker():
+    async def _work():
+        result = await investment_tracker()
+        await send_digest(result)
+    _run_job("investment_tracker", _work)
+
+
+def job_snapshot_investments():
+    async def _work():
+        count = await snapshot_investments()
+        logger.info("Snapshot job saved %d investment positions.", count)
+    _run_job("snapshot_investments", _work)
 
 
 def job_sync_transactions():

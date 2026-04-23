@@ -45,6 +45,17 @@ class NetWorthSnapshot(BaseModel):
     net_worth: float
 
 
+class InvestmentHolding(BaseModel):
+    name: str
+    ticker: Optional[str]
+    account: str
+    quantity: float
+    value: float
+    cost_basis: Optional[float]
+    gain_loss: Optional[float]
+    gain_loss_pct: Optional[float]
+
+
 class AnalysisResult(BaseModel):
     timestamp: datetime
     type: str  # "daily_digest", "anomaly_check", "weekly_report", "monthly_review"

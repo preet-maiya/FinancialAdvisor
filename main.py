@@ -16,6 +16,8 @@ from scheduler.jobs import (
     job_anomaly_check,
     job_weekly_report,
     job_monthly_review,
+    job_investment_tracker,
+    job_snapshot_investments,
     job_sync_transactions,
 )
 import web.api as web_api
@@ -82,6 +84,24 @@ def main():
         CronTrigger(day=1, hour=8, minute=0, timezone=TZ),
         id="monthly_review",
         name="Monthly Review",
+        replace_existing=True,
+    )
+
+    # Investment tracker — 8:00am and 1:00pm daily
+    scheduler.add_job(
+        job_investment_tracker,
+        CronTrigger(hour="8,13", minute=0, timezone=TZ),
+        id="investment_tracker",
+        name="Investment Tracker",
+        replace_existing=True,
+    )
+
+    # Snapshot investments — 1:30pm daily (store day's prices to DB)
+    scheduler.add_job(
+        job_snapshot_investments,
+        CronTrigger(hour=13, minute=30, timezone=TZ),
+        id="snapshot_investments",
+        name="Snapshot Investments",
         replace_existing=True,
     )
 

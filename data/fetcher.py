@@ -6,7 +6,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from monarchmoney import MonarchMoney
 
 import config
-from data.models import Transaction, Account, Budget, CashflowMonth, NetWorthSnapshot
+from data.models import Transaction, Account, Budget, CashflowMonth, NetWorthSnapshot, InvestmentHolding
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ async def get_accounts() -> list[Account]:
                     id=a.get("id", ""),
                     name=a.get("displayName", ""),
                     type=a.get("type", {}).get("name", "unknown"),
-                    balance=float(a.get("currentBalance", 0)),
+                    balance=float(a.get("currentBalance") or 0),
                     institution=a.get("institution", {}).get("name", "Unknown") if a.get("institution") else "Manual",
                 )
             )
@@ -187,6 +187,62 @@ async def get_cashflow(months: int = 3) -> list[CashflowMonth]:
 
     logger.info(f"Fetched cashflow for {len(cashflow)} months.")
     return cashflow
+
+
+INVESTMENT_ACCOUNT_TYPES = {"investment", "brokerage", "retirement", "401k", "ira", "roth"}
+
+
+async def get_investment_accounts() -> list[Account]:
+    accounts = await get_accounts()
+    return [
+        a for a in accounts
+        if a.type.lower() in INVESTMENT_ACCOUNT_TYPES
+        or any(kw in a.type.lower() for kw in INVESTMENT_ACCOUNT_TYPES)
+    ]
+
+
+async def get_investment_holdings() -> list[InvestmentHolding]:
+    mm = await _get_client()
+    inv_accounts = await get_investment_accounts()
+    if not inv_accounts:
+        logger.warning("No investment accounts found.")
+        return []
+
+    holdings = []
+    for account in inv_accounts:
+        try:
+            raw = await mm.get_account_holdings(account_id=account.id)
+        except Exception as e:
+            if "401" in str(e) or "unauthorized" in str(e).lower():
+                _invalidate_client()
+            logger.warning("Failed to fetch holdings for account %s: %s", account.name, e)
+            continue
+
+        for edge in raw.get("portfolio", {}).get("aggregateHoldings", {}).get("edges", []):
+            node = edge.get("node", {})
+            try:
+                value = float(node.get("totalValue") or 0)
+                basis = float(node.get("basis") or 0) or None
+                gain_loss = (value - basis) if basis else None
+                gain_loss_pct = (gain_loss / basis * 100) if basis else None
+                security = node.get("security") or {}
+                holdings.append(
+                    InvestmentHolding(
+                        name=security.get("name", "Unknown"),
+                        ticker=security.get("ticker") or None,
+                        account=account.name,
+                        quantity=float(node.get("quantity") or 0),
+                        value=value,
+                        cost_basis=basis,
+                        gain_loss=gain_loss,
+                        gain_loss_pct=gain_loss_pct,
+                    )
+                )
+            except Exception as e:
+                logger.warning("Failed to parse holding in %s: %s", account.name, e)
+
+    logger.info("Fetched %d investment holdings across %d accounts.", len(holdings), len(inv_accounts))
+    return holdings
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=5, max=60))

@@ -35,6 +35,9 @@ DB_PATH = os.getenv("DB_PATH", "data/finance.db")
 # Web UI
 WEB_PORT = int(os.getenv("WEB_PORT", "8000"))
 
+# Finnhub
+FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "")
+
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 

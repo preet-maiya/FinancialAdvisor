@@ -79,7 +79,8 @@ CREATE TABLE IF NOT EXISTS job_runs (
     finished_at TEXT,
     duration_seconds REAL,
     status TEXT NOT NULL DEFAULT 'running',
-    error TEXT
+    error TEXT,
+    trace TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_job_runs_started_at ON job_runs(started_at DESC);
@@ -100,7 +101,30 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id);
+
+CREATE TABLE IF NOT EXISTS daily_investment_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    account TEXT NOT NULL,
+    quantity REAL NOT NULL,
+    price REAL NOT NULL,
+    prev_close REAL NOT NULL,
+    day_change REAL NOT NULL,
+    day_change_pct REAL NOT NULL,
+    position_value REAL NOT NULL,
+    day_pnl REAL NOT NULL,
+    snapshotted_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, symbol, account)
+);
+
+CREATE INDEX IF NOT EXISTS idx_investment_snapshots_date ON daily_investment_snapshots(date DESC);
 """
+
+
+MIGRATIONS = [
+    "ALTER TABLE job_runs ADD COLUMN trace TEXT",
+]
 
 
 async def init_db() -> None:
@@ -110,6 +134,11 @@ async def init_db() -> None:
 
     async with aiosqlite.connect(config.DB_PATH) as db:
         await db.executescript(SCHEMA)
+        for migration in MIGRATIONS:
+            try:
+                await db.execute(migration)
+            except Exception:
+                pass  # column already exists
         await db.commit()
     logger.info(f"Database initialized at {config.DB_PATH}")
 

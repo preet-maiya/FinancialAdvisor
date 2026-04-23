@@ -1,10 +1,13 @@
+import asyncio
 import json
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
+import aiohttp
 from langchain.tools import tool
 
+import config
 import storage.repository as repo
 
 logger = logging.getLogger(__name__)
@@ -202,6 +205,54 @@ async def get_income_trend(months: int = 3) -> str:
 
 
 @tool
+async def get_investment_holdings_summary() -> str:
+    """Get current investment holdings with value, cost basis, and gain/loss for each position."""
+    from data.fetcher import get_investment_holdings
+    holdings = await get_investment_holdings()
+    if not holdings:
+        return "No investment holdings found."
+
+    total_value = sum(h.value for h in holdings)
+    total_basis = sum(h.cost_basis for h in holdings if h.cost_basis)
+    total_gain = sum(h.gain_loss for h in holdings if h.gain_loss is not None)
+
+    lines = [f"Investment holdings (total value: ${total_value:,.2f}):"]
+    for h in sorted(holdings, key=lambda x: -x.value):
+        ticker = f" ({h.ticker})" if h.ticker else ""
+        pct_of_portfolio = (h.value / total_value * 100) if total_value else 0
+        gl = ""
+        if h.gain_loss is not None:
+            sign = "+" if h.gain_loss >= 0 else ""
+            gl = f"  G/L: {sign}${h.gain_loss:,.2f} ({sign}{h.gain_loss_pct:.1f}%)" if h.gain_loss_pct is not None else f"  G/L: {sign}${h.gain_loss:,.2f}"
+        lines.append(
+            f"  {h.name}{ticker} [{h.account}]"
+            f"  {h.quantity:.4f} units @ ${h.value:,.2f} ({pct_of_portfolio:.1f}% of portfolio){gl}"
+        )
+
+    if total_basis:
+        total_gl_pct = (total_gain / total_basis * 100) if total_basis else 0
+        sign = "+" if total_gain >= 0 else ""
+        lines.append(f"\nTotal gain/loss: {sign}${total_gain:,.2f} ({sign}{total_gl_pct:.1f}%) vs cost basis ${total_basis:,.2f}")
+
+    return "\n".join(lines)
+
+
+@tool
+async def get_investment_accounts_summary() -> str:
+    """Get a summary of investment and retirement accounts with balances."""
+    from data.fetcher import get_investment_accounts
+    accounts = await get_investment_accounts()
+    if not accounts:
+        return "No investment accounts found."
+
+    total = sum(a.balance for a in accounts)
+    lines = [f"Investment accounts (total: ${total:,.2f}):"]
+    for a in sorted(accounts, key=lambda x: -x.balance):
+        lines.append(f"  {a.name} [{a.institution}] ({a.type}): ${a.balance:,.2f}")
+    return "\n".join(lines)
+
+
+@tool
 async def get_recent_transactions(limit: int = 20, days: int = 30) -> str:
     """Get the most recent N individual transactions from the last M days, ordered newest first."""
     rows = await repo.get_transactions(days=days, limit=limit)
@@ -217,6 +268,241 @@ async def get_recent_transactions(limit: int = 20, days: int = 30) -> str:
     return "\n".join(lines)
 
 
+@tool
+async def get_portfolio_symbols() -> str:
+    """Return all ticker symbols currently held in investment accounts, with name, account, and quantity."""
+    from data.fetcher import get_investment_holdings
+    holdings = await get_investment_holdings()
+    if not holdings:
+        return "No investment holdings found."
+
+    lines = ["Held symbols:"]
+    for h in sorted(holdings, key=lambda x: -x.value):
+        ticker = h.ticker.upper() if h.ticker else "(no ticker)"
+        lines.append(f"  {ticker}  |  {h.name}  |  {h.account}  |  qty: {h.quantity:.4f}  |  value: ${h.value:,.2f}")
+    return "\n".join(lines)
+
+
+@tool
+async def calculate_pnl_for_symbols(symbols: list[str]) -> str:
+    """Given a list of ticker symbols, fetch live prices from Finnhub and calculate day P&L
+    for each position using current holdings quantities. Results are sorted most-to-least profitable."""
+    from data.fetcher import get_investment_holdings
+    if not config.FINNHUB_API_KEY:
+        return "FINNHUB_API_KEY is not configured."
+    if not symbols:
+        return "No symbols provided."
+
+    symbols = [s.upper() for s in symbols]
+
+    # Load holdings to get quantities per ticker
+    holdings = await get_investment_holdings()
+    holdings_by_ticker: dict[str, list] = {}
+    for h in holdings:
+        if h.ticker:
+            holdings_by_ticker.setdefault(h.ticker.upper(), []).append(h)
+
+    # Fetch quotes concurrently
+    async def fetch_quote(session: aiohttp.ClientSession, symbol: str):
+        try:
+            async with session.get(
+                "https://finnhub.io/api/v1/quote",
+                params={"symbol": symbol, "token": config.FINNHUB_API_KEY},
+            ) as resp:
+                data = await resp.json()
+                return symbol, data if data.get("c", 0) != 0 else None
+        except Exception as e:
+            return symbol, None
+
+    async with aiohttp.ClientSession() as session:
+        quotes = dict(await asyncio.gather(*(fetch_quote(session, s) for s in symbols)))
+
+    # Build per-position P&L rows
+    rows = []
+    for symbol in symbols:
+        q = quotes.get(symbol)
+        if not q:
+            rows.append({"symbol": symbol, "error": "no quote data"})
+            continue
+        current = q["c"]
+        prev_close = q["pc"]
+        day_change = current - prev_close
+        day_change_pct = float(q.get("dp", (day_change / prev_close * 100) if prev_close else 0))
+
+        positions = holdings_by_ticker.get(symbol, [])
+        if positions:
+            for h in positions:
+                rows.append({
+                    "symbol": symbol,
+                    "name": h.name,
+                    "account": h.account,
+                    "quantity": h.quantity,
+                    "price": current,
+                    "day_change": day_change,
+                    "day_change_pct": day_change_pct,
+                    "position_value": h.quantity * current,
+                    "day_pnl": h.quantity * day_change,
+                })
+        else:
+            # Symbol requested but not in holdings — still show price
+            rows.append({
+                "symbol": symbol,
+                "name": symbol,
+                "account": "—",
+                "quantity": None,
+                "price": current,
+                "day_change": day_change,
+                "day_change_pct": day_change_pct,
+                "position_value": None,
+                "day_pnl": None,
+            })
+
+    # Sort by day P&L descending (positions without P&L go last)
+    rows.sort(key=lambda r: r.get("day_pnl") or float("-inf"), reverse=True)
+
+    lines = [f"P&L for {', '.join(symbols)} ({datetime.now().strftime('%Y-%m-%d')}):"]
+    total_pnl = 0.0
+    total_value = 0.0
+    for r in rows:
+        if "error" in r:
+            lines.append(f"  {r['symbol']}: {r['error']}")
+            continue
+        sign = "+" if r["day_change"] >= 0 else ""
+        if r["day_pnl"] is not None:
+            pnl_sign = "+" if r["day_pnl"] >= 0 else ""
+            total_pnl += r["day_pnl"]
+            total_value += r["position_value"]
+            lines.append(
+                f"  {r['symbol']} [{r['account']}]  qty {r['quantity']:.4f}"
+                f"  @ ${r['price']:.2f} ({sign}{r['day_change_pct']:.2f}%)"
+                f"  |  value: ${r['position_value']:,.2f}"
+                f"  |  day P&L: {pnl_sign}${r['day_pnl']:,.2f}"
+            )
+        else:
+            lines.append(
+                f"  {r['symbol']}  @ ${r['price']:.2f} ({sign}{r['day_change_pct']:.2f}%)  (not in holdings)"
+            )
+
+    if total_value:
+        total_sign = "+" if total_pnl >= 0 else ""
+        lines.append(f"\nTotal value: ${total_value:,.2f}  |  Total day P&L: {total_sign}${total_pnl:,.2f}")
+    return "\n".join(lines)
+
+
+@tool
+async def get_portfolio_daily_pnl() -> str:
+    """Get today's P&L for all investment holdings by fetching live prices from Finnhub for each held ticker."""
+    from data.fetcher import get_investment_holdings
+    if not config.FINNHUB_API_KEY:
+        return "FINNHUB_API_KEY is not configured."
+
+    holdings = await get_investment_holdings()
+    if not holdings:
+        return "No investment holdings found."
+
+    # Collect unique tickers that have a symbol
+    ticker_map: dict[str, list] = {}
+    for h in holdings:
+        if h.ticker:
+            ticker_map.setdefault(h.ticker.upper(), []).append(h)
+
+    if not ticker_map:
+        return "No ticker symbols found in holdings."
+
+    # Fetch all quotes concurrently
+    async def fetch_quote(session: aiohttp.ClientSession, symbol: str) -> tuple[str, dict | str]:
+        try:
+            async with session.get(
+                "https://finnhub.io/api/v1/quote",
+                params={"symbol": symbol, "token": config.FINNHUB_API_KEY},
+            ) as resp:
+                if resp.status != 200:
+                    return symbol, f"HTTP {resp.status}"
+                data = await resp.json()
+                return symbol, data if data.get("c", 0) != 0 else "No data"
+        except Exception as e:
+            return symbol, f"Error: {e}"
+
+    async with aiohttp.ClientSession() as session:
+        quotes = dict(await asyncio.gather(*(fetch_quote(session, s) for s in ticker_map)))
+
+    lines = [f"Portfolio day P&L ({datetime.now().strftime('%Y-%m-%d')}):"]
+    total_day_pnl = 0.0
+    total_value = 0.0
+
+    for symbol, holding_list in sorted(ticker_map.items()):
+        q = quotes.get(symbol)
+        if not isinstance(q, dict):
+            lines.append(f"  {symbol}: {q}")
+            continue
+        current = q["c"]
+        prev_close = q["pc"]
+        day_change = current - prev_close
+        day_change_pct = q.get("dp", (day_change / prev_close * 100) if prev_close else 0)
+        sign = "+" if day_change >= 0 else ""
+
+        for h in holding_list:
+            pos_value = h.quantity * current
+            pos_day_pnl = h.quantity * day_change
+            total_day_pnl += pos_day_pnl
+            total_value += pos_value
+            pnl_sign = "+" if pos_day_pnl >= 0 else ""
+            lines.append(
+                f"  {symbol} [{h.account}]  {h.quantity:.4f} units"
+                f"  @ ${current:.2f} ({sign}{day_change_pct:.2f}%)"
+                f"  |  Value: ${pos_value:,.2f}"
+                f"  |  Day P&L: {pnl_sign}${pos_day_pnl:,.2f}"
+            )
+
+    total_sign = "+" if total_day_pnl >= 0 else ""
+    lines.append(f"\nTotal portfolio value: ${total_value:,.2f}")
+    lines.append(f"Total day P&L: {total_sign}${total_day_pnl:,.2f}")
+    return "\n".join(lines)
+
+
+@tool
+async def get_stock_prices(symbols: list[str]) -> str:
+    """Get current stock price, change, and key quote data for a list of ticker symbols using Finnhub."""
+    if not config.FINNHUB_API_KEY:
+        return "FINNHUB_API_KEY is not configured."
+    if not symbols:
+        return "No symbols provided."
+
+    async def fetch_quote(session: aiohttp.ClientSession, symbol: str) -> tuple[str, dict | str]:
+        url = "https://finnhub.io/api/v1/quote"
+        try:
+            async with session.get(url, params={"symbol": symbol, "token": config.FINNHUB_API_KEY}) as resp:
+                if resp.status != 200:
+                    return symbol, f"HTTP {resp.status}"
+                data = await resp.json()
+                if data.get("c", 0) == 0:
+                    return symbol, "No data (invalid symbol or market closed)"
+                return symbol, data
+        except Exception as e:
+            return symbol, f"Error: {e}"
+
+    async with aiohttp.ClientSession() as session:
+        results = await asyncio.gather(*(fetch_quote(session, s.upper()) for s in symbols))
+
+    lines = ["Stock prices (Finnhub):"]
+    for symbol, data in results:
+        if isinstance(data, str):
+            lines.append(f"  {symbol}: {data}")
+            continue
+        current = data["c"]
+        prev_close = data["pc"]
+        change = current - prev_close
+        change_pct = data.get("dp", (change / prev_close * 100) if prev_close else 0)
+        high = data["h"]
+        low = data["l"]
+        sign = "+" if change >= 0 else ""
+        lines.append(
+            f"  {symbol}: ${current:.2f}  {sign}{change:.2f} ({sign}{change_pct:.2f}%)"
+            f"  |  H: ${high:.2f}  L: ${low:.2f}  |  Prev close: ${prev_close:.2f}"
+        )
+    return "\n".join(lines)
+
+
 ALL_TOOLS = [
     get_spending_by_category,
     get_top_merchants,
@@ -228,4 +514,10 @@ ALL_TOOLS = [
     get_anomalies,
     get_income_trend,
     get_recent_transactions,
+    get_investment_holdings_summary,
+    get_investment_accounts_summary,
+    get_portfolio_symbols,
+    calculate_pnl_for_symbols,
+    get_portfolio_daily_pnl,
+    get_stock_prices,
 ]
