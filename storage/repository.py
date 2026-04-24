@@ -134,8 +134,10 @@ async def save_analysis_result(result: AnalysisResult) -> None:
     async with get_db() as db:
         await db.execute(
             """
-            INSERT INTO analysis_results (timestamp, type, summary, alerts, score, raw_response)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO analysis_results
+                (timestamp, type, summary, alerts, score, raw_response,
+                 model, prompt_tokens, completion_tokens, tokens_per_sec, latency_seconds)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 result.timestamp.isoformat(),
@@ -144,6 +146,11 @@ async def save_analysis_result(result: AnalysisResult) -> None:
                 json.dumps(result.alerts),
                 result.score,
                 result.raw_response,
+                result.model,
+                result.prompt_tokens,
+                result.completion_tokens,
+                result.tokens_per_sec,
+                result.latency_seconds,
             ),
         )
         await db.commit()

@@ -124,6 +124,11 @@ CREATE INDEX IF NOT EXISTS idx_investment_snapshots_date ON daily_investment_sna
 
 MIGRATIONS = [
     "ALTER TABLE job_runs ADD COLUMN trace TEXT",
+    "ALTER TABLE analysis_results ADD COLUMN model TEXT",
+    "ALTER TABLE analysis_results ADD COLUMN prompt_tokens INTEGER",
+    "ALTER TABLE analysis_results ADD COLUMN completion_tokens INTEGER",
+    "ALTER TABLE analysis_results ADD COLUMN tokens_per_sec REAL",
+    "ALTER TABLE analysis_results ADD COLUMN latency_seconds REAL",
 ]
 
 

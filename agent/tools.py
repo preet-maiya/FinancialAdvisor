@@ -81,14 +81,27 @@ async def get_savings_rate(months: int = 3) -> str:
     return "\n".join(lines)
 
 
+_NON_SUBSCRIPTION_CATEGORIES = {
+    "Groceries", "Restaurants & Bars", "Coffee Shops", "Gas & Electric",
+    "Parking & Tolls", "Taxi & Ride Shares", "Postage & Shipping",
+    "Gifts", "Shopping", "Miscellaneous", "Personal", "Entertainment & Recreation",
+    "Travel & Vacation", "Furniture & Housewares", "Home Improvement",
+    "Electronics", "Charity", "Taxes", "Transfer", "Credit Card Payment",
+    "Investments (Transfers)", "Loan Repayment",
+}
+
+
 @tool
 async def get_subscription_list() -> str:
     """Detect recurring charges that look like subscriptions."""
     rows = await repo.get_transactions(days=90, expense_only=True)
+    # Track per-merchant: which months seen, what amounts, and what category
     merchant_months: dict[str, dict] = {}
+    merchant_category: dict[str, str] = {}
     for t in rows:
         m = t["merchant"]
         month = t["date"][:7]
+        merchant_category.setdefault(m, t["category"])
         if m not in merchant_months:
             merchant_months[m] = {}
         if month not in merchant_months[m]:
@@ -97,6 +110,9 @@ async def get_subscription_list() -> str:
 
     subscriptions = []
     for merchant, months in merchant_months.items():
+        category = merchant_category.get(merchant, "")
+        if category in _NON_SUBSCRIPTION_CATEGORIES:
+            continue
         if len(months) >= 2:
             all_amounts = [a for amounts in months.values() for a in amounts]
             avg = sum(all_amounts) / len(all_amounts)
@@ -162,21 +178,47 @@ async def get_anomalies(days: int = 7) -> str:
     rows = await repo.get_transactions(days=days, expense_only=True)
     baselines = {b["category"]: b for b in await repo.get_all_baselines()}
 
+    # Compute avg transaction size per category from 90-day history
+    history = await repo.get_transactions(days=90, expense_only=True)
+    cat_amounts: dict[str, list[float]] = {}
+    for t in history:
+        cat_amounts.setdefault(t["category"], []).append(t["amount"])
+    # Only use categories with at least 3 historical transactions for a reliable avg
+    avg_txn_size = {
+        cat: sum(amounts) / len(amounts)
+        for cat, amounts in cat_amounts.items()
+        if len(amounts) >= 3
+    }
+
     anomalies = []
     for t in rows:
         baseline = baselines.get(t["category"])
-        if baseline:
-            daily_avg = baseline["monthly_avg"] / 30
-            if t["amount"] > daily_avg * 2 and t["amount"] > 20:
-                ratio = t["amount"] / daily_avg if daily_avg > 0 else 0
+        # Skip categories with fewer than 2 months of data — baseline is unreliable
+        if not baseline or baseline["sample_months"] < 2:
+            continue
+
+        avg = avg_txn_size.get(t["category"])
+        if avg and avg > 0:
+            # Flag if the charge is 3x the typical transaction size for this category
+            if t["amount"] > avg * 3 and t["amount"] > 30:
+                ratio = t["amount"] / avg
                 anomalies.append(
                     f"  ⚠️ {t['merchant']} — ${t['amount']:.2f} on {t['date']} "
-                    f"({ratio:.1f}x daily avg for {t['category']})"
+                    f"({ratio:.1f}x typical {t['category']} charge of ${avg:.2f})"
+                )
+        else:
+            # Fallback: single transaction exceeds 60% of the monthly budget for this category
+            threshold = baseline["monthly_avg"] * 0.6
+            if t["amount"] > threshold and t["amount"] > 50:
+                pct = t["amount"] / baseline["monthly_avg"] * 100
+                anomalies.append(
+                    f"  ⚠️ {t['merchant']} — ${t['amount']:.2f} on {t['date']} "
+                    f"({pct:.0f}% of monthly {t['category']} budget of ${baseline['monthly_avg']:.2f})"
                 )
 
     if not anomalies:
         return f"No anomalies detected in the last {days} days."
-    lines = [f"Anomalies detected (last {days} days):"] + anomalies
+    lines = [f"Anomaly candidates (last {days} days) — verify before flagging:"] + anomalies
     return "\n".join(lines)
 
 

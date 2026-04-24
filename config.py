@@ -24,6 +24,9 @@ LLAMA_CPP_BASE_URL = os.getenv("LLAMA_CPP_BASE_URL", "http://localhost:8080/v1")
 LLAMA_CPP_MODEL = os.getenv("LLAMA_CPP_MODEL", "local-model")
 LLAMA_CPP_MAX_TOKENS = int(os.getenv("LLAMA_CPP_MAX_TOKENS", "2048"))
 LLAMA_CPP_TEMPERATURE = float(os.getenv("LLAMA_CPP_TEMPERATURE", "0.2"))
+# Full model identifier for record-keeping — include quantization, e.g. "gemma-3-4b-it-Q4_K_M"
+# Falls back to LLAMA_CPP_MODEL if not set.
+LLAMA_CPP_MODEL_ID = os.getenv("LLAMA_CPP_MODEL_ID", LLAMA_CPP_MODEL)
 
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")

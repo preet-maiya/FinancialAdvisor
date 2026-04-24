@@ -2,7 +2,8 @@ import logging
 import re
 from datetime import datetime
 
-from agent.llm import get_llm
+import config
+from agent.llm import get_llm, LLMLogger
 from agent.tools import ALL_TOOLS
 from agent.react import run_react
 import agent.prompts as prompts
@@ -14,14 +15,20 @@ logger = logging.getLogger(__name__)
 
 
 async def _run_analysis(analysis_type: str, system_prompt: str, user_message: str) -> AnalysisResult:
+    llm_logger = LLMLogger()
     try:
-        raw = await run_react(get_llm(), ALL_TOOLS, system_prompt, user_message)
+        raw = await run_react(get_llm(llm_logger), ALL_TOOLS, system_prompt, user_message)
         return AnalysisResult(
             timestamp=datetime.now(),
             type=analysis_type,
             summary=raw[:500],
             alerts=[],
             raw_response=raw,
+            model=config.LLAMA_CPP_MODEL_ID,
+            prompt_tokens=llm_logger.total_prompt_tokens or None,
+            completion_tokens=llm_logger.total_completion_tokens or None,
+            tokens_per_sec=llm_logger.tokens_per_sec,
+            latency_seconds=round(llm_logger.total_latency_seconds, 3) or None,
         )
     except Exception as e:
         logger.error("Analysis failed for %s: %s", analysis_type, e)
@@ -31,6 +38,11 @@ async def _run_analysis(analysis_type: str, system_prompt: str, user_message: st
             summary=f"Analysis failed: {e}",
             alerts=[],
             raw_response=str(e),
+            model=config.LLAMA_CPP_MODEL_ID,
+            prompt_tokens=llm_logger.total_prompt_tokens or None,
+            completion_tokens=llm_logger.total_completion_tokens or None,
+            tokens_per_sec=llm_logger.tokens_per_sec,
+            latency_seconds=round(llm_logger.total_latency_seconds, 3) or None,
         )
 
 
@@ -67,7 +79,7 @@ async def anomaly_check() -> AnalysisResult:
     alerts = [
         line.strip()
         for line in result.raw_response.split("\n")
-        if any(m in line for m in ["🚨", "⚠️", "•"]) and "$" in line
+        if any(m in line for m in ["🚨", "⚠️"]) and "$" in line
     ]
     result.alerts = alerts
 
@@ -82,10 +94,12 @@ async def weekly_report() -> AnalysisResult:
     system = (override or prompts.WEEKLY_REPORT_SYSTEM).format(date=week_start)
     message = (
         "/no_think "
-        "Generate the weekly financial report. Compare this week's spending to prior week "
-        "by category. Identify top 3 overspend categories and top 3 wins. "
-        "Calculate savings rate. Report monthly budget progress. "
-        "Identify one behavioral spending pattern. Use all available tools."
+        f"Today is {week_start}. Generate the weekly financial report. "
+        "Call get_spending_by_category with days=7 for this week, then days=14 to get both weeks combined "
+        "(subtract to get prior week). Compare each category. "
+        "Call get_savings_rate for the savings rate trend. "
+        "Call get_recent_transactions with limit=50 to identify a specific behavioral pattern. "
+        "Be specific with dollar amounts — show actual numbers for both weeks in every comparison."
     )
     result = await _run_analysis("weekly_report", system, message)
     await repo.save_analysis_result(result)
@@ -159,8 +173,9 @@ async def investment_tracker() -> AnalysisResult:
     message = (
         "/no_think "
         "Generate the weekly investment tracker report. "
-        "Use get_investment_accounts_summary and get_investment_holdings_summary to fetch portfolio data. "
-        "Use get_net_worth_trend to show investment accounts in context of overall net worth. "
+        "Use get_investment_accounts_summary and get_investment_holdings_summary for portfolio data. "
+        "Use get_portfolio_daily_pnl for today's P&L. "
+        "Use get_net_worth_trend with months=3 for the month-by-month net worth numbers. "
         "Be specific with dollar amounts and percentages."
     )
     result = await _run_analysis("investment_tracker", system, message)

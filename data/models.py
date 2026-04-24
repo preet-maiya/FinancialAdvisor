@@ -63,3 +63,8 @@ class AnalysisResult(BaseModel):
     alerts: list[str]
     score: Optional[float] = None
     raw_response: str
+    model: Optional[str] = None          # e.g. "gemma-3-4b-it-Q4_K_M"
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
+    tokens_per_sec: Optional[float] = None
+    latency_seconds: Optional[float] = None
