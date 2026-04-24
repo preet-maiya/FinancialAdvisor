@@ -116,7 +116,7 @@ async def run_react_stream(
                     yield {"type": "token", "text": token}
                     streamed_any = True
 
-        reply = full_text
+        reply = full_text.strip()
         logger.info("[ReAct stream step %d] output: %s", step + 1, reply[:300])
 
         tool_calls = TOOL_CALL_RE.findall(reply)
@@ -231,7 +231,7 @@ async def run_react(
 
     for step in range(MAX_STEPS):
         response = await llm.ainvoke(messages)
-        reply = response.content
+        reply = response.content.strip()
         logger.info("[ReAct step %d] model output: %s", step + 1, reply[:300])
 
         tool_calls = TOOL_CALL_RE.findall(reply)
@@ -267,7 +267,7 @@ async def run_react(
                 )
             ))
             response = await llm.ainvoke(messages)
-            return response.content
+            return response.content.strip()
         last_tool_calls = tool_calls
 
         messages.append(AIMessage(content=reply))
@@ -301,4 +301,4 @@ async def run_react(
         )
     ))
     response = await llm.ainvoke(messages)
-    return response.content
+    return response.content.strip()
