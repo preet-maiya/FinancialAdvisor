@@ -4,7 +4,7 @@ import traceback
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
-from agent.analyzer import daily_digest, anomaly_check, weekly_report, monthly_review, investment_tracker, snapshot_investments
+from agent.analyzer import daily_digest, anomaly_check, weekly_report, monthly_review, investment_tracker, weekly_investment_tracker, snapshot_investments
 from data.fetcher import get_transactions
 from notifications.telegram import send_digest, send_alert
 import storage.repository as repo
@@ -13,13 +13,14 @@ import job_state
 logger = logging.getLogger(__name__)
 
 JOB_NAMES = {
-    "daily_digest":       "Daily Digest",
-    "anomaly_check":      "Anomaly Check",
-    "weekly_report":      "Weekly Report",
-    "monthly_review":     "Monthly Review",
-    "investment_tracker": "Investment Tracker",
-    "snapshot_investments": "Snapshot Investments",
-    "sync_transactions":  "Sync Transactions",
+    "daily_digest":              "Daily Digest",
+    "anomaly_check":             "Anomaly Check",
+    "weekly_report":             "Weekly Report",
+    "monthly_review":            "Monthly Review",
+    "investment_tracker":        "Investment Tracker",
+    "weekly_investment_tracker": "Weekly Investment Tracker",
+    "snapshot_investments":      "Snapshot Investments",
+    "sync_transactions":         "Sync Transactions",
 }
 
 
@@ -107,6 +108,13 @@ def job_investment_tracker():
         result = await investment_tracker()
         await send_digest(result)
     _run_job("investment_tracker", _work)
+
+
+def job_weekly_investment_tracker():
+    async def _work():
+        result = await weekly_investment_tracker()
+        await send_digest(result)
+    _run_job("weekly_investment_tracker", _work)
 
 
 def job_snapshot_investments():

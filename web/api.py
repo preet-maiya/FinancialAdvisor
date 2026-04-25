@@ -32,31 +32,34 @@ def set_scheduler(s) -> None:
 
 
 JOB_DEFAULTS = {
-    "daily_digest":       {"minute": "0",  "hour": "7",    "day": "*", "month": "*", "day_of_week": "*"},
-    "anomaly_check":      {"minute": "0",  "hour": "*/4",  "day": "*", "month": "*", "day_of_week": "*"},
-    "weekly_report":      {"minute": "0",  "hour": "19",   "day": "*", "month": "*", "day_of_week": "sun"},
-    "monthly_review":     {"minute": "0",  "hour": "8",    "day": "1", "month": "*", "day_of_week": "*"},
-    "investment_tracker": {"minute": "0",  "hour": "8,13", "day": "*", "month": "*", "day_of_week": "*"},
-    "snapshot_investments":{"minute": "30","hour": "13",   "day": "*", "month": "*", "day_of_week": "*"},
-    "sync_transactions":  {"minute": "30", "hour": "*/6",  "day": "*", "month": "*", "day_of_week": "*"},
+    "daily_digest":              {"minute": "0",  "hour": "7",    "day": "*", "month": "*", "day_of_week": "*"},
+    "anomaly_check":             {"minute": "0",  "hour": "*/4",  "day": "*", "month": "*", "day_of_week": "*"},
+    "weekly_report":             {"minute": "0",  "hour": "19",   "day": "*", "month": "*", "day_of_week": "sun"},
+    "monthly_review":            {"minute": "0",  "hour": "8",    "day": "1", "month": "*", "day_of_week": "*"},
+    "investment_tracker":        {"minute": "0",  "hour": "8,16", "day": "*", "month": "*", "day_of_week": "*"},
+    "weekly_investment_tracker": {"minute": "0",  "hour": "18",   "day": "*", "month": "*", "day_of_week": "sun"},
+    "snapshot_investments":      {"minute": "30", "hour": "13",   "day": "*", "month": "*", "day_of_week": "*"},
+    "sync_transactions":         {"minute": "30", "hour": "*/6",  "day": "*", "month": "*", "day_of_week": "*"},
 }
 
 JOB_NAMES = {
-    "daily_digest":        "Daily Digest",
-    "anomaly_check":       "Anomaly Check",
-    "weekly_report":       "Weekly Report",
-    "monthly_review":      "Monthly Review",
-    "investment_tracker":  "Investment Tracker",
-    "snapshot_investments":"Snapshot Investments",
-    "sync_transactions":   "Sync Transactions",
+    "daily_digest":              "Daily Digest",
+    "anomaly_check":             "Anomaly Check",
+    "weekly_report":             "Weekly Report",
+    "monthly_review":            "Monthly Review",
+    "investment_tracker":        "Investment Tracker",
+    "weekly_investment_tracker": "Weekly Investment Tracker",
+    "snapshot_investments":      "Snapshot Investments",
+    "sync_transactions":         "Sync Transactions",
 }
 
 PROMPT_DEFAULTS = {
-    "daily_digest":       prompts.DAILY_DIGEST_SYSTEM,
-    "anomaly_check":      prompts.ANOMALY_CHECK_SYSTEM,
-    "weekly_report":      prompts.WEEKLY_REPORT_SYSTEM,
-    "monthly_review":     prompts.MONTHLY_REVIEW_SYSTEM,
-    "investment_tracker": prompts.INVESTMENT_TRACKER_SYSTEM,
+    "daily_digest":              prompts.DAILY_DIGEST_SYSTEM,
+    "anomaly_check":             prompts.ANOMALY_CHECK_SYSTEM,
+    "weekly_report":             prompts.WEEKLY_REPORT_SYSTEM,
+    "monthly_review":            prompts.MONTHLY_REVIEW_SYSTEM,
+    "investment_tracker":        prompts.INVESTMENT_TRACKER_SYSTEM,
+    "weekly_investment_tracker": prompts.WEEKLY_INVESTMENT_TRACKER_SYSTEM,
 }
 
 
@@ -153,8 +156,7 @@ async def update_schedule(job_id: str, body: ScheduleBody):
     await upsert_schedule_override(job_id, fields)
     if _scheduler:
         from apscheduler.triggers.cron import CronTrigger
-        import pytz
-        tz = pytz.timezone("America/New_York")
+        import config
         try:
             _scheduler.reschedule_job(
                 job_id,
@@ -164,7 +166,7 @@ async def update_schedule(job_id: str, body: ScheduleBody):
                     day=fields["day"],
                     month=fields["month"],
                     day_of_week=fields["day_of_week"],
-                    timezone=tz,
+                    timezone=config.TZ,
                 ),
             )
         except Exception as e:

@@ -2,6 +2,7 @@ import os
 import ssl
 import logging
 import certifi
+import pytz
 from dotenv import load_dotenv
 
 # Patch ssl to use certifi's CA bundle so aiohttp (and any other library)
@@ -40,6 +41,22 @@ WEB_PORT = int(os.getenv("WEB_PORT", "8000"))
 
 # Finnhub
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "")
+
+# Timezone — read from TZ env var, then /etc/timezone, then fall back to UTC
+def _load_tz() -> pytz.BaseTzInfo:
+    name = os.environ.get("TZ")
+    if not name:
+        try:
+            with open("/etc/timezone") as _f:
+                name = _f.read().strip()
+        except OSError:
+            pass
+    try:
+        return pytz.timezone(name) if name else pytz.utc
+    except pytz.UnknownTimeZoneError:
+        return pytz.utc
+
+TZ = _load_tz()
 
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

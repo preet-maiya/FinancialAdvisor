@@ -9,6 +9,8 @@ services:
       - ./data:/app/data                                    # SQLite + DB persistence
       - ./finance_advisor.log:/app/finance_advisor.log      # Log file
       - ./.monarch_session.json:/app/.monarch_session.json  # Auth session (bind mount)
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     restart: unless-stopped
     networks:
       - fa-net

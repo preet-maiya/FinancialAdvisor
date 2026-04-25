@@ -4,7 +4,6 @@ import traceback
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-import pytz
 import uvicorn
 
 import config  # noqa: F401 — loads env and configures logging
@@ -17,6 +16,7 @@ from scheduler.jobs import (
     job_weekly_report,
     job_monthly_review,
     job_investment_tracker,
+    job_weekly_investment_tracker,
     job_snapshot_investments,
     job_sync_transactions,
 )
@@ -24,7 +24,7 @@ import web.api as web_api
 
 logger = logging.getLogger(__name__)
 
-TZ = pytz.timezone("America/New_York")
+TZ = config.TZ
 
 
 async def startup() -> None:
@@ -87,12 +87,21 @@ def main():
         replace_existing=True,
     )
 
-    # Investment tracker — 8:00am and 1:00pm daily
+    # Investment tracker (daily P&L) — 8:00am and 4:00pm daily
     scheduler.add_job(
         job_investment_tracker,
-        CronTrigger(hour="8,13", minute=0, timezone=TZ),
+        CronTrigger(hour="8,16", minute=0, timezone=TZ),
         id="investment_tracker",
         name="Investment Tracker",
+        replace_existing=True,
+    )
+
+    # Weekly investment tracker (full portfolio view) — Sundays at 18:00
+    scheduler.add_job(
+        job_weekly_investment_tracker,
+        CronTrigger(day_of_week="sun", hour=18, minute=0, timezone=TZ),
+        id="weekly_investment_tracker",
+        name="Weekly Investment Tracker",
         replace_existing=True,
     )
 

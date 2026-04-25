@@ -172,15 +172,32 @@ async def investment_tracker() -> AnalysisResult:
     system = (override or prompts.INVESTMENT_TRACKER_SYSTEM).format(date=today)
     message = (
         "/no_think "
+        f"Today is {today}. Generate the daily investment P&L update. "
+        "Use get_portfolio_daily_pnl for today's P&L data. "
+        "Use get_investment_holdings_summary to list all holdings with their day change. "
+        "Focus on what moved today. Be specific with dollar amounts and percentages."
+    )
+    result = await _run_analysis("investment_tracker", system, message)
+    await repo.save_analysis_result(result)
+    logger.info("Investment tracker complete.")
+    return result
+
+
+async def weekly_investment_tracker() -> AnalysisResult:
+    today = datetime.now().strftime("%B %d, %Y")
+    override = await get_prompt_override("weekly_investment_tracker")
+    system = (override or prompts.WEEKLY_INVESTMENT_TRACKER_SYSTEM).format(date=today)
+    message = (
+        "/no_think "
         "Generate the weekly investment tracker report. "
         "Use get_investment_accounts_summary and get_investment_holdings_summary for portfolio data. "
         "Use get_portfolio_daily_pnl for today's P&L. "
         "Use get_net_worth_trend with months=3 for the month-by-month net worth numbers. "
         "Be specific with dollar amounts and percentages."
     )
-    result = await _run_analysis("investment_tracker", system, message)
+    result = await _run_analysis("weekly_investment_tracker", system, message)
     await repo.save_analysis_result(result)
-    logger.info("Investment tracker complete.")
+    logger.info("Weekly investment tracker complete.")
     return result
 
 
