@@ -1,3 +1,4 @@
+import html
 import logging
 import hashlib
 import re
@@ -29,7 +30,44 @@ def _fmt_pct(value: float, show_arrow: bool = True) -> str:
     return f"{value:.1f}%"
 
 
-async def send_message(text: str, parse_mode: str = "Markdown") -> bool:
+def _inline_to_html(text: str) -> str:
+    """Escape HTML and convert inline markdown (**bold**, *bold*, _italic_, `code`)."""
+    pattern = re.compile(r'(\*\*[^*\n]+\*\*|\*[^*\n]+\*|_[^_\n]+_|`[^`\n]+`)')
+    result = []
+    last = 0
+    for m in pattern.finditer(text):
+        result.append(html.escape(text[last:m.start()]))
+        s = m.group(0)
+        if s.startswith('**'):
+            result.append(f'<b>{html.escape(s[2:-2])}</b>')
+        elif s.startswith('*'):
+            result.append(f'<b>{html.escape(s[1:-1])}</b>')
+        elif s.startswith('_'):
+            result.append(f'<i>{html.escape(s[1:-1])}</i>')
+        else:
+            result.append(f'<code>{html.escape(s[1:-1])}</code>')
+        last = m.end()
+    result.append(html.escape(text[last:]))
+    return ''.join(result)
+
+
+def _md_to_html(text: str) -> str:
+    """Convert markdown from LLM output to Telegram HTML."""
+    lines = []
+    for line in text.split('\n'):
+        m = re.match(r'^#{1,3}\s+(.*)', line)
+        if m:
+            lines.append(f'<b>{_inline_to_html(m.group(1))}</b>')
+            continue
+        m = re.match(r'^[-*]\s+(.*)', line)
+        if m:
+            lines.append(f'• {_inline_to_html(m.group(1))}')
+            continue
+        lines.append(_inline_to_html(line))
+    return '\n'.join(lines)
+
+
+async def send_message(text: str, parse_mode: str = "HTML") -> bool:
     if not config.TELEGRAM_BOT_TOKEN or not config.TELEGRAM_CHAT_ID:
         logger.warning("Telegram not configured, skipping message.")
         return False
@@ -54,7 +92,7 @@ async def send_message(text: str, parse_mode: str = "Markdown") -> bool:
     if await _post(payload):
         return True
 
-    # Retry without parse_mode if Markdown caused a parse error
+    # Retry without parse_mode if HTML caused a parse error
     logger.warning("Retrying Telegram message without parse_mode.")
     payload.pop("parse_mode")
     return await _post(payload)
@@ -70,7 +108,7 @@ async def send_alert(title: str, body: str, urgency: str = "normal") -> bool:
         logger.info(f"Alert '{title}' already sent in last 24h, skipping.")
         return False
 
-    text = f"{emoji} *{title}*\n\n{body}"
+    text = f"{emoji} <b>{html.escape(title)}</b>\n\n{body}"
     success = await send_message(text)
     if success:
         await repo.log_alert_sent(alert_key)
@@ -86,14 +124,14 @@ async def send_digest(result: AnalysisResult) -> bool:
     text = _strip_think(result.raw_response)
     # Truncate if too long for Telegram (4096 char limit)
     if len(text) > 4000:
-        text = text[:3990] + "\n\n_[truncated]_"
+        text = text[:3990] + "\n\n<i>[truncated]</i>"
     return await send_message(text)
 
 
 async def send_startup_message(accounts_summary: str) -> bool:
     text = (
-        "✅ *FinanceAdvisor is online*\n\n"
-        f"_{datetime.now().strftime('%Y-%m-%d %H:%M')}_\n\n"
+        "✅ <b>FinanceAdvisor is online</b>\n\n"
+        f"<i>{datetime.now().strftime('%Y-%m-%d %H:%M')}</i>\n\n"
         f"{accounts_summary}\n\n"
         "Scheduled jobs active:\n"
         "• Daily digest at 07:00\n"

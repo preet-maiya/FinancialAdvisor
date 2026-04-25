@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 MAX_STEPS = 10
 
 TOOL_CALL_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
+THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+
+MAX_REDIRECTS = 3  # max consecutive steps with no tool call before aborting
 
 _SYSTEM_PREFIX = """\
 {system_prompt}
@@ -25,7 +28,8 @@ You have access to the following tools. To call a tool, output EXACTLY this form
 
 <tool_call>{{"name": "TOOL_NAME", "arguments": {{...}}}}</tool_call>
 
-You will then receive the result and can call more tools or write your final answer.
+You may output multiple tool calls in a single turn to fetch data in parallel — put each on its own line.
+You will then receive the results and can call more tools or write your final answer.
 Do NOT write any analysis or numbers before calling tools — you have no real data yet.
 Do NOT introduce yourself or greet. Go straight to calling tools.
 
@@ -40,13 +44,21 @@ Assistant: <tool_call>{{"name": "get_spending_by_category", "arguments": {{"days
 Tool result: {{"dining": 340.50, "groceries": 210.00}}
 Assistant: You spent $340.50 on dining last month.
 
-Example 2 — calling multiple tools in sequence:
-User: Give me a full spending summary and check for anomalies.
+Example 2 — calling multiple tools in parallel (preferred when data is independent):
+User: Give me a full spending summary with savings rate.
 Assistant: <tool_call>{{"name": "get_spending_by_category", "arguments": {{"days": 30}}}}</tool_call>
-Tool result: {{"dining": 340.50, "transport": 95.00}}
+<tool_call>{{"name": "get_savings_rate", "arguments": {{}}}}</tool_call>
+<tool_call>{{"name": "get_subscription_list", "arguments": {{}}}}</tool_call>
+Tool results: ...
+Assistant: [write full answer using all three results]
+
+Example 3 — sequential calls when later calls depend on earlier results:
+User: Check for anomalies and cross-verify the biggest one.
 Assistant: <tool_call>{{"name": "get_anomalies", "arguments": {{"days": 7}}}}</tool_call>
-Tool result: []
-Assistant: Spending this month: dining $340.50, transport $95.00. No anomalies detected.
+Tool result: ⚠️ Amazon — $340 on 2026-04-21 (5x typical)
+Assistant: <tool_call>{{"name": "compare_to_baseline", "arguments": {{"category": "Groceries", "current_amount": 340.0}}}}</tool_call>
+Tool result: $340 is 2.1x the $162/month baseline.
+Assistant: Amazon $340 on Apr 21 is worth flagging — 2.1x your typical grocery month.
 
 --- END EXAMPLES ---"""
 
@@ -98,11 +110,13 @@ async def run_react_stream(
 
     tools_called = False
     last_tool_calls: list[str] = []
+    consecutive_redirects = 0
 
     for step in range(MAX_STEPS):
         full_text = ""
         tool_call_seen = False
         streamed_any = False
+        in_think = False
 
         async for chunk in llm.astream(messages):
             token = chunk.content
@@ -113,16 +127,32 @@ async def run_react_stream(
                 if "<tool_call>" in full_text:
                     tool_call_seen = True  # stop streaming from here
                 else:
-                    yield {"type": "token", "text": token}
-                    streamed_any = True
+                    # Suppress <think>...</think> blocks from streaming to client
+                    if "<think>" in full_text and "</think>" not in full_text:
+                        in_think = True
+                    elif "</think>" in full_text:
+                        in_think = False
+                    if not in_think:
+                        yield {"type": "token", "text": token}
+                        streamed_any = True
 
-        reply = full_text.strip()
+        reply = THINK_RE.sub("", full_text).strip()
         logger.info("[ReAct stream step %d] output: %s", step + 1, reply[:300])
 
         tool_calls = TOOL_CALL_RE.findall(reply)
 
         if not tool_calls:
             if not tools_called:
+                consecutive_redirects += 1
+                if consecutive_redirects >= MAX_REDIRECTS:
+                    logger.warning(
+                        "[ReAct stream step %d] Model failed to call any tool after %d redirects — aborting.",
+                        step + 1, MAX_REDIRECTS,
+                    )
+                    if streamed_any:
+                        yield {"type": "reset"}
+                    yield {"type": "done", "reply": ""}
+                    return
                 # Model skipped tools — reset client and force a tool call
                 if streamed_any:
                     yield {"type": "reset"}
@@ -155,7 +185,7 @@ async def run_react_stream(
                 if token:
                     forced_reply += token
                     yield {"type": "token", "text": token}
-            yield {"type": "done", "reply": forced_reply}
+            yield {"type": "done", "reply": THINK_RE.sub("", forced_reply).strip()}
             return
 
         last_tool_calls = tool_calls
@@ -195,7 +225,7 @@ async def run_react_stream(
         if token:
             final_reply += token
             yield {"type": "token", "text": token}
-    yield {"type": "done", "reply": final_reply}
+    yield {"type": "done", "reply": THINK_RE.sub("", final_reply).strip()}
 
 
 async def run_react(
@@ -228,15 +258,23 @@ async def run_react(
 
     tools_called = False
     last_tool_calls: list[str] = []
+    consecutive_redirects = 0
 
     for step in range(MAX_STEPS):
         response = await llm.ainvoke(messages)
-        reply = response.content.strip()
+        reply = THINK_RE.sub("", response.content).strip()
         logger.info("[ReAct step %d] model output: %s", step + 1, reply[:300])
 
         tool_calls = TOOL_CALL_RE.findall(reply)
         if not tool_calls:
             if not tools_called:
+                consecutive_redirects += 1
+                if consecutive_redirects >= MAX_REDIRECTS:
+                    logger.warning(
+                        "[ReAct step %d] Model failed to call any tool after %d redirects — aborting.",
+                        step + 1, MAX_REDIRECTS,
+                    )
+                    return ""
                 # Model skipped tools and hallucinated data — force it to call tools
                 logger.warning("[ReAct step %d] No tool calls detected and no tools have been called yet. Redirecting.", step + 1)
                 first_tool = tools[0] if tools else None
