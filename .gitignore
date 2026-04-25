@@ -5,7 +5,7 @@
 .monarch_session.json
 
 # Database
-data/finance.db
+data/finance.db*
 
 # Logs
 *.log
