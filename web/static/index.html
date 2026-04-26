@@ -1,138 +1,392 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FinancialAdvisor — Job Manager</title>
+<title>FinancialAdvisor</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
+  /* ── Theme variables ──────────────────────────────────────── */
+  :root {
+    --bg:           #0f1117;
+    --surface:      #1a1d27;
+    --surface2:     #13151f;
+    --surface3:     #0d0f18;
+    --border:       #2d3148;
+    --text:         #e2e8f0;
+    --text-muted:   #7c83a0;
+    --text-dim:     #5a6080;
+    --accent:       #6366f1;
+    --accent-light: #a5b4fc;
+    --hover:        #22253a;
+    --success:      #059669;
+    --success-text: #6ee7b7;
+    --danger:       #dc2626;
+    --danger-text:  #fca5a5;
+    --warning:      #f59e0b;
+    --run:          #10b981;
+    --user-bubble:  #6366f1;
+    --shadow:       rgba(0,0,0,0.4);
+    --icon-filter:  invert(1) opacity(0.7);
+  }
+
+  [data-theme="light"] {
+    --bg:           #f0f2f9;
+    --surface:      #ffffff;
+    --surface2:     #f5f6fc;
+    --surface3:     #eaecf5;
+    --border:       #dde1ef;
+    --text:         #1e2235;
+    --text-muted:   #6b7280;
+    --text-dim:     #9ca3af;
+    --accent:       #6366f1;
+    --accent-light: #4f46e5;
+    --hover:        #eef0ff;
+    --success:      #059669;
+    --success-text: #065f46;
+    --danger:       #dc2626;
+    --danger-text:  #991b1b;
+    --warning:      #d97706;
+    --run:          #059669;
+    --user-bubble:  #6366f1;
+    --shadow:       rgba(0,0,0,0.1);
+    --icon-filter:  opacity(0.6);
+  }
+
+  /* ── Reset ───────────────────────────────────────────────── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f1117; color: #e2e8f0; display: flex; height: 100vh; overflow: hidden; }
 
-  /* Sidebar */
-  #sidebar { width: 220px; background: #1a1d27; border-right: 1px solid #2d3148; display: flex; flex-direction: column; flex-shrink: 0; }
-  #sidebar h1 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #7c83a0; padding: 20px 16px 12px; border-bottom: 1px solid #2d3148; }
-  #job-list { flex: 1; overflow-y: auto; padding: 8px 0; }
-  .job-item { padding: 10px 16px; cursor: pointer; border-left: 3px solid transparent; transition: background .15s; font-size: 14px; }
-  .job-item:hover { background: #22253a; }
-  .job-item.active { background: #22253a; border-left-color: #6366f1; color: #a5b4fc; }
-  .job-next { font-size: 11px; color: #5a6080; margin-top: 2px; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    transition: background .2s, color .2s;
+  }
 
-  /* Main panel */
-  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  #header { padding: 20px 28px 0; border-bottom: 1px solid #2d3148; }
-  #header h2 { font-size: 20px; font-weight: 600; }
-  #header .next { font-size: 12px; color: #7c83a0; margin-top: 4px; margin-bottom: 12px; }
+  /* ── Sidebar ─────────────────────────────────────────────── */
+  #sidebar {
+    width: 240px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    transition: width .25s ease;
+    overflow: hidden;
+  }
+  #sidebar.collapsed { width: 52px; }
+
+  /* Header */
+  #sidebar-header {
+    display: flex;
+    align-items: center;
+    padding: 13px 10px;
+    border-bottom: 1px solid var(--border);
+    gap: 6px;
+    flex-shrink: 0;
+    min-height: 50px;
+  }
+  .app-logo { font-size: 20px; flex-shrink: 0; line-height: 1; }
+  .app-name {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    color: var(--text-muted);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    opacity: 1;
+    transition: opacity .2s;
+  }
+  #sidebar.collapsed .app-name { display: none; }
+  #sidebar.collapsed .app-logo { display: none; }
+  #sidebar.collapsed #theme-toggle { display: none; }
+  #sidebar.collapsed #sidebar-header { justify-content: center; }
+
+  .icon-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+    border-radius: 5px;
+    font-size: 14px;
+    flex-shrink: 0;
+    line-height: 1;
+    transition: color .15s, background .15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+  }
+  .icon-btn:hover { color: var(--text); background: var(--hover); opacity: 1; }
+
+  /* Sidebar tabs */
+  #sidebar-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .stab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 9px 4px;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    gap: 3px;
+    transition: color .15s, border-color .15s, background .15s;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .stab:hover:not(.active) { color: var(--text-muted); background: var(--hover); }
+  .stab.active { color: var(--accent-light); border-bottom-color: var(--accent); }
+  .stab .stab-icon { font-size: 17px; line-height: 1; }
+  .stab .stab-label { transition: opacity .2s, max-height .2s; max-height: 20px; overflow: hidden; }
+
+  /* Sidebar panel content */
+  #sidebar-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+  .sidebar-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .sidebar-panel.active { display: flex; }
+
+  /* Job list */
+  #job-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+  .job-item {
+    padding: 9px 12px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: background .15s;
+    font-size: 13.5px;
+    overflow: hidden;
+  }
+  .job-item:hover { background: var(--hover); }
+  .job-item.active { background: var(--hover); border-left-color: var(--accent); color: var(--accent-light); }
+  .job-name-row { display: flex; align-items: center; gap: 7px; white-space: nowrap; overflow: hidden; }
+  .job-icon { font-size: 14px; flex-shrink: 0; }
+  .job-name-text { overflow: hidden; text-overflow: ellipsis; }
+  .job-next { font-size: 11px; color: var(--text-dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Collapsed job list: icons only */
+  #sidebar.collapsed .job-name-text { display: none; }
+  #sidebar.collapsed .job-next { display: none; }
+  #sidebar.collapsed .run-elapsed { display: none; }
+  #sidebar.collapsed .job-item { padding: 10px 0; border-left-color: transparent !important; }
+  #sidebar.collapsed .job-item.active { background: var(--hover); }
+  #sidebar.collapsed .job-name-row { justify-content: center; }
+
+  /* Collapsed strip icon buttons */
+  .cstrip-btn {
+    width: 36px; height: 36px; background: none; border: 1px solid transparent; border-radius: 8px;
+    color: var(--text-muted); cursor: pointer; font-size: 18px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: color .15s, background .15s, border-color .15s;
+  }
+  .cstrip-btn:hover { color: var(--text); background: var(--hover); border-color: var(--border); opacity: 1; }
+  .cstrip-btn.active { color: var(--accent-light); background: rgba(99,102,241,.12); border-color: rgba(99,102,241,.3); }
+
+  /* Recents overlay */
+  #recents-overlay {
+    position: fixed; top: 0; left: 52px; bottom: 0;
+    width: 220px; background: var(--surface);
+    border-right: 1px solid var(--border);
+    box-shadow: 6px 0 28px var(--shadow);
+    z-index: 40; display: none; flex-direction: column;
+  }
+  #recents-overlay.open { display: flex; }
+  #recents-overlay-header {
+    padding: 14px 14px 10px; border-bottom: 1px solid var(--border);
+    font-size: 11px; font-weight: 600; letter-spacing: .06em;
+    color: var(--text-muted); text-transform: uppercase;
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+  #recents-overlay-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+
+  /* Running dot */
+  .run-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--run); margin-left: 5px; vertical-align: middle; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  .run-elapsed { font-size: 10px; color: var(--run); margin-top: 2px; }
+  .badge-running { background: rgba(16,185,129,.2); color: #6ee7b7; border: 1px solid rgba(16,185,129,.4); border-radius: 20px; font-size: 11px; padding: 2px 8px; margin-left: 8px; vertical-align: middle; animation: pulse 1.4s ease-in-out infinite; }
+
+  /* Chat session panel (inside sidebar) */
+  #session-panel-header {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  #session-panel-header span {
+    font-size: 11px; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: .07em; flex: 1;
+    white-space: nowrap; overflow: hidden;
+    transition: opacity .2s;
+  }
+  #new-chat-btn { font-size: 18px; background: none; border: none; color: var(--accent); cursor: pointer; padding: 0 2px; line-height: 1; flex-shrink: 0; }
+  #new-chat-btn:hover { color: var(--accent-light); opacity: 1; }
+  #session-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+  .session-item {
+    padding: 9px 12px; cursor: pointer; border-left: 3px solid transparent;
+    font-size: 12px; color: var(--text-muted); transition: background .15s;
+    display: flex; align-items: flex-start; gap: 6px; overflow: hidden;
+  }
+  .session-item:hover { background: var(--hover); }
+  .session-item.active { background: var(--hover); border-left-color: var(--accent); color: var(--text); }
+  .session-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .session-date { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  .session-del { opacity: 0; font-size: 13px; color: var(--text-dim); cursor: pointer; padding: 0 2px; flex-shrink: 0; }
+  .session-item:hover .session-del { opacity: 1; }
+  .session-del:hover { color: var(--danger-text); }
+
+  /* Runs sidebar tab content */
+  #sidebar-runs-panel {
+    padding: 14px 12px;
+    display: flex; flex-direction: column; gap: 10px;
+    transition: opacity .2s;
+  }
+  .runs-info-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--text-muted);
+  }
+
+  /* ── Main panel ───────────────────────────────────────────── */
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; align-items: center; }
+
+  #header { display: none; }
 
   /* Tabs */
-  .tabs { display: flex; gap: 0; margin-top: 12px; }
-  .tab { padding: 8px 20px; font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; color: #7c83a0; transition: color .15s, border-color .15s; }
-  .tab.active { color: #a5b4fc; border-bottom-color: #6366f1; }
-  .tab:hover:not(.active) { color: #c4c9e0; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+  .tab { padding: 10px 20px; font-size: 13.5px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-muted); transition: color .15s, border-color .15s; user-select: none; }
+  .tab.active { color: var(--accent-light); border-bottom-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--text); }
 
   /* Content */
-  #content { flex: 1; overflow-y: auto; padding: 28px; }
+  #content { flex: 1; overflow-y: auto; padding: 28px; background: var(--bg); }
   .panel { display: none; }
   .panel.active { display: block; }
 
   /* Form */
   .form-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
-  .field label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: #7c83a0; margin-bottom: 5px; }
-  .field input { width: 100%; background: #1a1d27; border: 1px solid #2d3148; border-radius: 6px; color: #e2e8f0; padding: 8px 10px; font-size: 14px; outline: none; transition: border-color .15s; }
-  .field input:focus { border-color: #6366f1; }
-  .hint { font-size: 12px; color: #5a6080; margin-bottom: 20px; }
+  .field label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); margin-bottom: 5px; }
+  .field input { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 8px 10px; font-size: 14px; outline: none; transition: border-color .15s; }
+  .field input:focus { border-color: var(--accent); }
+  .hint { font-size: 12px; color: var(--text-dim); margin-bottom: 20px; }
 
-  textarea { width: 100%; background: #1a1d27; border: 1px solid #2d3148; border-radius: 6px; color: #e2e8f0; padding: 12px; font-size: 13px; font-family: "SF Mono", "Fira Code", monospace; line-height: 1.6; resize: vertical; min-height: 320px; outline: none; transition: border-color .15s; }
-  textarea:focus { border-color: #6366f1; }
+  textarea { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 12px; font-size: 13px; font-family: "SF Mono", "Fira Code", monospace; line-height: 1.6; resize: vertical; min-height: 320px; outline: none; transition: border-color .15s; }
+  textarea:focus { border-color: var(--accent); }
 
-  .prompt-hint { font-size: 12px; color: #f59e0b; background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); border-radius: 6px; padding: 8px 12px; margin-bottom: 14px; }
+  .prompt-hint { font-size: 12px; color: var(--warning); background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); border-radius: 6px; padding: 8px 12px; margin-bottom: 14px; }
 
   /* Buttons */
   .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
-  button { padding: 8px 18px; border-radius: 6px; border: none; font-size: 14px; cursor: pointer; font-weight: 500; transition: opacity .15s; }
+  button { padding: 8px 18px; border-radius: 6px; border: none; font-size: 14px; cursor: pointer; font-weight: 500; transition: opacity .15s, background .15s; }
   button:hover { opacity: .85; }
-  .btn-primary { background: #6366f1; color: #fff; }
-  .btn-secondary { background: #2d3148; color: #c4c9e0; }
-  .btn-danger { background: #dc2626; color: #fff; }
-  .btn-run { background: #059669; color: #fff; }
+  .btn-primary  { background: var(--accent); color: #fff; }
+  .btn-secondary { background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); }
+  .btn-danger   { background: var(--danger); color: #fff; }
+  .btn-run      { background: var(--success); color: #fff; }
   button:disabled { opacity: .45; cursor: not-allowed; }
 
-  /* Running job indicator */
-  .job-item .run-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #10b981; margin-left: 6px; vertical-align: middle; animation: pulse 1.4s ease-in-out infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
-  .job-item .run-elapsed { font-size: 10px; color: #10b981; margin-top: 2px; }
-  .badge-running { background: rgba(16,185,129,.2); color: #6ee7b7; border: 1px solid rgba(16,185,129,.4); border-radius: 20px; font-size: 11px; padding: 2px 8px; margin-left: 8px; vertical-align: middle; animation: pulse 1.4s ease-in-out infinite; }
+  /* Badge */
+  .badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }
+  .badge-override { background: rgba(99,102,241,.25); color: var(--accent-light); }
+  .badge-default  { background: rgba(90,96,128,.2);  color: var(--text-muted); }
 
-  /* Sidebar nav links (Chat, Runs) */
-  .nav-link { padding: 10px 16px; cursor: pointer; border-left: 3px solid transparent; font-size: 14px; color: #7c83a0; border-top: 1px solid #2d3148; transition: background .15s; }
-  .nav-link:hover { background: #22253a; color: #c4c9e0; }
-  .nav-link.active { background: #22253a; border-left-color: #6366f1; color: #a5b4fc; }
+  /* Empty state */
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; min-height: 300px; color: var(--text-dim); font-size: 14px; gap: 12px; padding: 40px; text-align: center; }
+  .empty-icon { font-size: 42px; opacity: .4; }
 
-  /* Job Runs view */
-  #runs-view { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  /* ── Runs view ────────────────────────────────────────────── */
+  #runs-view { display: none; flex: 1; flex-direction: column; overflow: hidden; width: 100%; }
   #runs-view.active { display: flex; }
-  #runs-header { padding: 20px 28px 16px; border-bottom: 1px solid #2d3148; display: flex; align-items: center; gap: 16px; }
-  #runs-header h2 { font-size: 20px; font-weight: 600; flex: 1; }
-  #runs-body { flex: 1; overflow-y: auto; padding: 24px 28px; }
-  .runs-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .runs-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: #7c83a0; padding: 0 12px 10px; border-bottom: 1px solid #2d3148; }
-  .runs-table td { padding: 10px 12px; border-bottom: 1px solid #1e2135; vertical-align: top; }
+  #runs-header { display: none; }
+  #runs-body { flex: 1; overflow-y: auto; overflow-x: auto; padding: 24px 28px; background: var(--bg); }
+  .runs-table { width: 100%; max-width: 1100px; margin: 0 auto; border-collapse: collapse; font-size: 13px; min-width: 600px; }
+  .runs-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); padding: 0 12px 10px; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; white-space: nowrap; }
+  .runs-table th:hover { color: var(--text); }
+  .runs-table th .sort-arrow { margin-left: 4px; opacity: 0.4; font-size: 10px; }
+  .runs-table th.sorted .sort-arrow { opacity: 1; color: var(--accent-light); }
+  .runs-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
   .runs-table tr:last-child td { border-bottom: none; }
-  .runs-table tr:hover td { background: #181b28; }
-  .status-success { color: #6ee7b7; font-weight: 500; }
-  .status-error { color: #fca5a5; font-weight: 500; }
+  .runs-table tr:hover td { background: var(--hover); }
+  .status-success { color: var(--success-text); font-weight: 500; }
+  .status-error   { color: var(--danger-text);  font-weight: 500; }
   .status-running { color: #fcd34d; font-weight: 500; animation: pulse 1.4s ease-in-out infinite; }
-  .error-cell { color: #f87171; font-size: 12px; max-width: 320px; word-break: break-word; }
-  .runs-empty { color: #5a6080; font-size: 14px; padding: 40px 0; text-align: center; }
-  .trace-toggle { font-size: 11px; color: #6366f1; cursor: pointer; white-space: nowrap; }
-  .trace-toggle:hover { color: #a5b4fc; }
-  .trace-row td { padding: 0 12px 10px 28px; }
-  .trace-pre { background: #0d0f18; border: 1px solid #2d3148; border-radius: 6px; padding: 12px; font-size: 11px; font-family: "SF Mono", "Fira Code", monospace; color: #f87171; white-space: pre-wrap; word-break: break-all; margin: 0; max-height: 300px; overflow-y: auto; }
+  .error-cell     { color: #f87171; font-size: 12px; max-width: 320px; word-break: break-word; }
+  .runs-empty     { color: var(--text-dim); font-size: 14px; padding: 40px 0; text-align: center; }
+  .trace-toggle   { font-size: 11px; color: var(--accent); cursor: pointer; white-space: nowrap; }
+  .trace-toggle:hover { color: var(--accent-light); }
+  .trace-row td   { padding: 0 12px 10px 28px; }
+  .trace-pre { background: var(--surface3); border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-size: 11px; font-family: "SF Mono","Fira Code",monospace; color: #f87171; white-space: pre-wrap; word-break: break-all; margin: 0; max-height: 300px; overflow-y: auto; }
 
-  /* Chat view */
-  #chat-view { display: none; flex: 1; overflow: hidden; }
+  /* ── Runs filters ─────────────────────────────────────────── */
+  #runs-filters {
+    flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 12px;
+    padding: 20px 28px 0;
+    background: var(--bg);
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .flt-group { display: flex; flex-direction: column; gap: 5px; }
+  .flt-group > label { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); }
+  .flt-select, .flt-input {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); padding: 6px 8px; font-size: 13px; outline: none;
+    transition: border-color .15s; height: 32px;
+  }
+  .flt-select:focus, .flt-input:focus { border-color: var(--accent); }
+  .flt-row { display: flex; align-items: center; gap: 6px; }
+  .flt-input-num { width: 68px; }
+  .flt-sep { font-size: 12px; color: var(--text-dim); }
+  #runs-count { flex-shrink: 0; font-size: 12px; color: var(--text-muted); padding: 10px 28px 0; background: var(--bg); max-width: 1100px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+
+  /* ── Chat view ────────────────────────────────────────────── */
+  #chat-view { display: none; flex-direction: column; overflow: hidden; height: min(680px, calc(100vh - 80px)); width: 100%; max-width: 860px; margin: auto; }
   #chat-view.active { display: flex; }
-
-  /* Session list panel */
-  #session-panel { width: 200px; background: #13151f; border-right: 1px solid #2d3148; display: flex; flex-direction: column; flex-shrink: 0; }
-  #session-panel-header { padding: 14px 12px 10px; border-bottom: 1px solid #2d3148; display: flex; align-items: center; gap: 8px; }
-  #session-panel-header span { font-size: 12px; font-weight: 600; color: #7c83a0; text-transform: uppercase; letter-spacing: .07em; flex: 1; }
-  #new-chat-btn { font-size: 18px; background: none; border: none; color: #6366f1; cursor: pointer; padding: 0 2px; line-height: 1; }
-  #new-chat-btn:hover { color: #a5b4fc; opacity: 1; }
-  #session-list { flex: 1; overflow-y: auto; padding: 6px 0; }
-  .session-item { padding: 9px 12px; cursor: pointer; border-left: 3px solid transparent; font-size: 12px; color: #9ca3b8; transition: background .15s; display: flex; align-items: flex-start; gap: 6px; }
-  .session-item:hover { background: #1a1d27; }
-  .session-item.active { background: #1a1d27; border-left-color: #6366f1; color: #c4c9e0; }
-  .session-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .session-date { font-size: 10px; color: #5a6080; margin-top: 2px; }
-  .session-del { opacity: 0; font-size: 13px; color: #5a6080; cursor: pointer; padding: 0 2px; flex-shrink: 0; }
-  .session-item:hover .session-del { opacity: 1; }
-  .session-del:hover { color: #f87171; }
-
-  /* Conversation panel */
-  #convo-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  #chat-header { padding: 16px 24px 14px; border-bottom: 1px solid #2d3148; }
-  #chat-header h2 { font-size: 18px; font-weight: 600; }
-  #chat-header p { font-size: 12px; color: #7c83a0; margin-top: 3px; }
-  #chat-messages { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; }
+  #chat-header { padding: 12px 24px 10px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  #chat-header h2 { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  #chat-header p  { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  #chat-messages { flex: 1; overflow-y: auto; padding: 24px max(24px, calc((100% - 760px) / 2)) 12px; display: flex; flex-direction: column; justify-content: flex-start; gap: 16px; background: var(--bg); }
+  /* Empty state: hide header, show greeting, center everything */
+  #chat-greeting { display: none; text-align: center; font-size: 26px; font-weight: 600; color: var(--text); padding: 0 24px; flex-shrink: 0; }
+  #chat-view:has(.chat-empty) { justify-content: center; }
+  #chat-view:has(.chat-empty) #chat-header { display: none; }
+  #chat-view:has(.chat-empty) #chat-greeting { display: block; margin-bottom: 20px; }
+  #chat-view:has(.chat-empty) #chat-messages { display: none; }
   .chat-msg { display: flex; flex-direction: column; max-width: 82%; }
-  .chat-msg.user { align-self: flex-end; align-items: flex-end; }
+  .chat-msg.user      { align-self: flex-end;   align-items: flex-end; }
   .chat-msg.assistant { align-self: flex-start; align-items: flex-start; }
   .chat-bubble { padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
-  .chat-msg.user .chat-bubble { background: #6366f1; color: #fff; border-bottom-right-radius: 3px; }
-  .chat-msg.assistant .chat-bubble { background: #1a1d27; border: 1px solid #2d3148; color: #e2e8f0; border-bottom-left-radius: 3px; }
-  .chat-label { font-size: 11px; color: #5a6080; margin-bottom: 4px; }
-  #chat-input-row { display: flex; gap: 10px; padding: 14px 24px; border-top: 1px solid #2d3148; }
-  #chat-input { flex: 1; background: #1a1d27; border: 1px solid #2d3148; border-radius: 8px; color: #e2e8f0; padding: 10px 14px; font-size: 14px; outline: none; resize: none; font-family: inherit; line-height: 1.5; max-height: 120px; transition: border-color .15s; }
-  #chat-input:focus { border-color: #6366f1; }
-  #chat-send { align-self: flex-end; padding: 10px 20px; }
-  .thinking { color: #7c83a0; font-style: italic; font-size: 13px; }
-  .tool-status { font-size: 12px; color: #7c83a0; font-style: italic; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
-  .tool-status::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 2px solid #6366f1; border-top-color: transparent; animation: spin .7s linear infinite; flex-shrink: 0; }
+  .chat-msg.user      .chat-bubble { background: var(--user-bubble); color: #fff; border-bottom-right-radius: 3px; }
+  .chat-msg.assistant .chat-bubble { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-bottom-left-radius: 3px; }
+  .chat-label { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+  #chat-input-row { display: flex; padding: 10px max(24px, calc((100% - 760px) / 2)) 18px; background: var(--bg); flex-shrink: 0; }
+  .chat-input-wrapper { position: relative; flex: 1; display: flex; align-items: flex-end; background: var(--surface); border: 1px solid color-mix(in srgb, var(--border) 60%, transparent); border-radius: 12px; box-shadow: 0 2px 12px var(--shadow), 0 1px 3px rgba(0,0,0,0.08); transition: border-color .15s, box-shadow .15s; padding: 6px 10px; }
+  .chat-input-wrapper:focus-within { border-color: color-mix(in srgb, var(--accent) 50%, transparent); box-shadow: 0 4px 16px var(--shadow), 0 1px 4px rgba(0,0,0,0.1); }
+  #chat-input { flex: 1; background: transparent; border: none; color: var(--text); padding: 4px 60px 4px 2px; font-size: 14px; outline: none; resize: none; font-family: inherit; line-height: 1.5; min-height: 0 !important; max-height: 120px; }
+  #chat-send { position: absolute; right: 8px; bottom: 7px; padding: 5px 14px; border-radius: 8px; font-size: 13px; }
+  .tool-status { font-size: 12px; color: var(--text-muted); font-style: italic; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .tool-status::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--accent); border-top-color: transparent; animation: spin .7s linear infinite; flex-shrink: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .chat-empty { color: #5a6080; font-size: 14px; text-align: center; margin: auto; padding: 40px; }
+  .chat-empty { color: var(--text-dim); font-size: 14px; text-align: center; margin: auto; padding: 40px; }
 
-  /* Markdown content inside assistant bubbles */
+  /* Markdown */
   .md-content { line-height: 1.65; }
   .md-content p { margin: 0 0 10px; }
   .md-content p:last-child { margin-bottom: 0; }
@@ -141,65 +395,198 @@
   .md-content h1,.md-content h2,.md-content h3 { font-weight: 700; margin: 14px 0 6px; font-size: 15px; }
   .md-content ul,.md-content ol { margin: 4px 0 10px 18px; padding: 0; }
   .md-content li { margin-bottom: 3px; }
-  .md-content code { background: rgba(0,0,0,.35); border-radius: 3px; padding: 1px 5px; font-family: "SF Mono","Fira Code",monospace; font-size: 12px; }
-  .md-content pre { background: rgba(0,0,0,.35); border-radius: 6px; padding: 10px 12px; margin: 8px 0; overflow-x: auto; }
+  .md-content code { background: rgba(128,128,128,.15); border-radius: 3px; padding: 1px 5px; font-family: "SF Mono","Fira Code",monospace; font-size: 12px; }
+  .md-content pre { background: rgba(128,128,128,.12); border-radius: 6px; padding: 10px 12px; margin: 8px 0; overflow-x: auto; }
   .md-content pre code { background: none; padding: 0; font-size: 12px; }
-  .md-content blockquote { border-left: 3px solid #4a4f70; margin: 8px 0; padding: 4px 12px; color: #9ca3b8; }
+  .md-content blockquote { border-left: 3px solid var(--border); margin: 8px 0; padding: 4px 12px; color: var(--text-muted); }
 
-  /* Think block */
-  .think-block { margin-bottom: 10px; border: 1px solid #2d3148; border-radius: 6px; overflow: hidden; }
-  .think-block summary { cursor: pointer; padding: 6px 10px; font-size: 12px; color: #7c83a0; user-select: none; list-style: none; display: flex; align-items: center; gap: 6px; background: #13151f; }
-  .think-block summary::before { content: "▶"; font-size: 9px; transition: transform .2s; }
+  /* Think block — Claude.ai style */
+  .think-block { margin: 2px 0 10px; }
+  .think-block summary {
+    cursor: pointer; padding: 3px 6px 3px 2px; font-size: 12px; color: var(--text-dim);
+    user-select: none; list-style: none; display: inline-flex; align-items: center; gap: 4px;
+    border-radius: 5px; transition: color .15s, background .15s;
+  }
+  .think-block summary:hover { color: var(--text-muted); background: var(--hover); }
+  .think-block summary::before {
+    content: "›"; font-size: 18px; font-weight: 300; line-height: 1;
+    display: inline-block; transition: transform .2s ease; margin-right: 1px;
+  }
   .think-block[open] summary::before { transform: rotate(90deg); }
   .think-block summary::-webkit-details-marker { display: none; }
-  .think-content { padding: 10px 12px; font-size: 12px; color: #7c83a0; white-space: pre-wrap; word-break: break-word; font-family: "SF Mono","Fira Code",monospace; line-height: 1.55; background: #0d0f18; }
-
-  /* Override badge */
-  .badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }
-  .badge-override { background: rgba(99,102,241,.25); color: #a5b4fc; }
-  .badge-default { background: rgba(90,96,128,.2); color: #7c83a0; }
+  .think-content {
+    margin-top: 6px; padding: 10px 14px; font-size: 12px; color: var(--text-muted);
+    white-space: pre-wrap; word-break: break-word;
+    font-family: "SF Mono","Fira Code",monospace; line-height: 1.6;
+    background: var(--surface2); border-radius: 6px;
+    border-left: 2px solid var(--border);
+  }
 
   /* Toast */
-  #toast { position: fixed; bottom: 24px; right: 24px; background: #22253a; border: 1px solid #2d3148; border-radius: 8px; padding: 12px 18px; font-size: 14px; opacity: 0; transform: translateY(8px); transition: opacity .25s, transform .25s; pointer-events: none; z-index: 100; max-width: 320px; }
-  #toast.show { opacity: 1; transform: translateY(0); }
-  #toast.error { border-color: #dc2626; color: #fca5a5; }
-  #toast.success { border-color: #059669; color: #6ee7b7; }
+  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; font-size: 14px; opacity: 0; transform: translateY(8px); transition: opacity .25s, transform .25s; pointer-events: none; z-index: 100; max-width: 320px; color: var(--text); box-shadow: 0 4px 16px var(--shadow); }
+  #toast.show    { opacity: 1; transform: translateY(0); }
+  #toast.error   { border-color: var(--danger);  color: var(--danger-text); }
+  #toast.success { border-color: var(--success); color: var(--success-text); }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 </style>
 </head>
 <body>
 
+<!-- ── Sidebar ──────────────────────────────────────────────── -->
 <div id="sidebar">
-  <h1>Jobs</h1>
-  <div id="job-list"></div>
-  <div id="chat-link" class="nav-link" onclick="openChat()">Chat with Advisor</div>
-  <div id="runs-link" class="nav-link" onclick="openRuns()">Job Runs</div>
+
+  <!-- Header -->
+  <div id="sidebar-header">
+    <span class="app-logo">💹</span>
+    <span class="app-name">FinAdvisor</span>
+    <button class="icon-btn" id="theme-toggle" title="Toggle theme" onclick="toggleTheme()">🌙</button>
+    <button class="icon-btn" id="collapse-btn" title="Collapse sidebar" onclick="toggleSidebar()"><img id="collapse-icon" src="/static/icons/sidebar-collapse.png" style="width:18px;height:18px;opacity:.7;filter:var(--icon-filter)"></button>
+  </div>
+
+  <!-- Tab bar -->
+  <div id="sidebar-tabs">
+    <div class="stab active" data-section="jobs" onclick="openSidebarSection('jobs')">
+      <span class="stab-icon">⚡</span>
+      <span class="stab-label">JOBS</span>
+    </div>
+    <div class="stab" data-section="chat" onclick="openSidebarSection('chat')">
+      <span class="stab-icon">💬</span>
+      <span class="stab-label">CHAT</span>
+    </div>
+    <div class="stab" data-section="runs" onclick="openSidebarSection('runs')">
+      <span class="stab-icon">📊</span>
+      <span class="stab-label">RUNS</span>
+    </div>
+  </div>
+
+  <!-- Panel content -->
+  <div id="sidebar-content">
+
+    <!-- Jobs panel -->
+    <div id="sidebar-jobs" class="sidebar-panel active">
+      <div id="job-list"></div>
+    </div>
+
+    <!-- Chat panel -->
+    <div id="sidebar-chat" class="sidebar-panel">
+      <div id="session-panel-header" class="expanded-only">
+        <span>History</span>
+        <button id="new-chat-btn" title="New chat" onclick="newChat()">+</button>
+      </div>
+      <div id="session-list" class="expanded-only"></div>
+      <div class="collapsed-only">
+        <button class="cstrip-btn" title="New chat" onclick="newChat()">+</button>
+        <button class="cstrip-btn" id="recents-btn" title="Recent chats" onclick="toggleRecentsOverlay()">⊞</button>
+      </div>
+    </div>
+
+    <!-- Runs panel -->
+    <div id="sidebar-runs-tab" class="sidebar-panel">
+      <div id="sidebar-runs-panel" class="expanded-only">
+        <div class="runs-info-card">View job execution history, durations, and error traces.</div>
+        <button class="btn-secondary" onclick="loadRuns()" style="width:100%;font-size:13px">↻ Refresh</button>
+      </div>
+      <div class="collapsed-only">
+        <button class="cstrip-btn" title="Refresh runs" onclick="loadRuns()">↻</button>
+      </div>
+    </div>
+
+  </div>
 </div>
 
+<!-- ── Recents overlay (collapsed chat) ─────────────────────── -->
+<div id="recents-overlay">
+  <div id="recents-overlay-header">
+    <span>Recent Chats</span>
+    <button class="icon-btn" title="Close" onclick="closeRecentsOverlay()" style="font-size:12px">✕</button>
+  </div>
+  <div id="recents-overlay-list"></div>
+</div>
+
+<!-- ── Main ─────────────────────────────────────────────────── -->
 <div id="main">
-  <!-- Job view -->
-  <div id="job-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
-    <div id="header">
-      <h2 id="job-title">Select a job</h2>
-      <div class="next" id="job-next"></div>
-      <div class="tabs" id="tabs" style="display:none">
-        <div class="tab active" data-tab="schedule">Schedule</div>
-        <div class="tab" data-tab="prompt" id="prompt-tab">Prompt</div>
-      </div>
+
+  <!-- Job detail view -->
+  <div id="job-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden;width:100%">
+    <div id="header" aria-hidden="true">
+      <h2 id="job-title" style="display:none"></h2>
+      <div class="next" id="job-next" style="display:none"></div>
+    </div>
+    <div class="tabs" id="tabs" style="display:none">
+      <div class="tab active" data-tab="schedule">📅 Schedule</div>
+      <div class="tab" data-tab="prompt" id="prompt-tab">✍️ Prompt</div>
     </div>
     <div id="content">
       <div class="panel active" id="panel-schedule">
-        <p style="color:#5a6080;font-size:14px">Select a job from the sidebar.</p>
+        <div class="empty-state">
+          <div class="empty-icon">⚡</div>
+          <p>Select a job from the sidebar to view its schedule.</p>
+        </div>
       </div>
       <div class="panel" id="panel-prompt"></div>
     </div>
   </div>
 
-  <!-- Job Runs view -->
+  <!-- Runs view -->
   <div id="runs-view">
     <div id="runs-header">
-      <h2>Job Runs</h2>
-      <button class="btn-secondary" onclick="loadRuns()" style="padding:6px 14px;font-size:13px">Refresh</button>
+      <h2>📊 Job Runs</h2>
+      <button class="btn-secondary" onclick="loadRuns()" style="padding:6px 14px;font-size:13px">↻ Refresh</button>
     </div>
+
+    <!-- Filters -->
+    <div id="runs-filters">
+      <div class="flt-group">
+        <label>Job</label>
+        <select id="filter-job" class="flt-select" onchange="applyRunsFilters()">
+          <option value="">All jobs</option>
+        </select>
+      </div>
+      <div class="flt-group">
+        <label>Started</label>
+        <div class="flt-row">
+          <select id="filter-date-preset" class="flt-select" onchange="onDatePresetChange()">
+            <option value="">Any time</option>
+            <option value="1d">Last 24 h</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <div id="date-custom" class="flt-row" style="display:none">
+            <input type="date" id="filter-date-from" class="flt-select" onchange="applyRunsFilters()">
+            <span class="flt-sep">–</span>
+            <input type="date" id="filter-date-to" class="flt-select" onchange="applyRunsFilters()">
+          </div>
+        </div>
+      </div>
+      <div class="flt-group">
+        <label>Status</label>
+        <select id="filter-status" class="flt-select" onchange="applyRunsFilters()">
+          <option value="">All</option>
+          <option value="success">Success</option>
+          <option value="error">Error</option>
+          <option value="running">Running</option>
+        </select>
+      </div>
+      <div class="flt-group">
+        <label>Duration (s)</label>
+        <div class="flt-row">
+          <input type="number" id="filter-dur-min" class="flt-input flt-input-num" placeholder="min" min="0" oninput="applyRunsFilters()">
+          <span class="flt-sep">–</span>
+          <input type="number" id="filter-dur-max" class="flt-input flt-input-num" placeholder="max" min="0" oninput="applyRunsFilters()">
+        </div>
+      </div>
+      <div class="flt-group" style="justify-content:flex-end">
+        <button class="btn-secondary" onclick="clearRunsFilters()" style="padding:5px 12px;font-size:12px;height:32px">Clear</button>
+      </div>
+    </div>
+
+    <div id="runs-count"></div>
     <div id="runs-body">
       <p class="runs-empty">Loading…</p>
     </div>
@@ -207,37 +594,190 @@
 
   <!-- Chat view -->
   <div id="chat-view">
-    <!-- Session list -->
-    <div id="session-panel">
-      <div id="session-panel-header">
-        <span>History</span>
-        <button id="new-chat-btn" title="New chat" onclick="newChat()">+</button>
-      </div>
-      <div id="session-list"></div>
-    </div>
-    <!-- Conversation -->
-    <div id="convo-panel">
-      <div id="chat-header">
-        <h2>Financial Advisor</h2>
+    <div id="chat-header">
+      <div>
+        <h2>💬 Financial Advisor</h2>
         <p>Ask anything about your spending, budgets, savings, or transactions.</p>
       </div>
-      <div id="chat-messages">
-        <p class="chat-empty">Select a conversation or start a new one.</p>
-      </div>
-      <div id="chat-input-row">
+    </div>
+    <div id="chat-greeting">How can I help you today?</div>
+    <div id="chat-messages">
+      <p class="chat-empty">Select a conversation or start a new one.</p>
+    </div>
+    <div id="chat-input-row">
+      <div class="chat-input-wrapper">
         <textarea id="chat-input" rows="1" placeholder="Ask about your finances…"></textarea>
         <button class="btn-primary" id="chat-send" onclick="sendChat()">Send</button>
       </div>
     </div>
   </div>
+
 </div>
 
 <div id="toast"></div>
 
 <script>
-const JOBS_WITH_PROMPTS = new Set(["daily_digest","anomaly_check","weekly_report","monthly_review","investment_tracker"]);
-let currentJob = null;
+// ── Constants ────────────────────────────────────────────────
+const JOBS_WITH_PROMPTS = new Set(["daily_digest","anomaly_check","weekly_report","monthly_review","investment_tracker","weekly_investment_tracker"]);
 
+const JOB_ICONS = {
+  daily_digest:              "📰",
+  anomaly_check:             "🔍",
+  weekly_report:             "📈",
+  monthly_review:            "📋",
+  investment_tracker:        "💰",
+  weekly_investment_tracker: "📊",
+  snapshot_investments:      "📸",
+  sync_transactions:         "🔄",
+};
+
+let currentJob = null;
+let currentSection = "jobs";
+
+// ── Theme ────────────────────────────────────────────────────
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  document.getElementById("theme-toggle").textContent = theme === "dark" ? "🌙" : "☀️";
+  localStorage.setItem("fa-theme", theme);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme");
+  applyTheme(current === "dark" ? "light" : "dark");
+}
+
+// Load saved theme
+applyTheme(localStorage.getItem("fa-theme") || "dark");
+
+// ── Sidebar collapse ─────────────────────────────────────────
+function applySidebarCollapsed(collapsed) {
+  document.getElementById("sidebar-tabs").style.display = collapsed ? "none" : "";
+
+  document.querySelectorAll(".expanded-only").forEach(el => {
+    el.style.display = collapsed ? "none" : "";
+  });
+
+  document.querySelectorAll(".collapsed-only").forEach(el => {
+    if (collapsed) {
+      el.style.display = "flex";
+      el.style.flexDirection = "column";
+      el.style.alignItems = "center";
+      el.style.padding = "10px 0";
+      el.style.gap = "8px";
+    } else {
+      el.style.display = "none";
+    }
+  });
+}
+
+function setSidebarIcon(collapsed) {
+  document.getElementById("collapse-icon").src = collapsed
+    ? "/static/icons/sidebar-expand.png"
+    : "/static/icons/sidebar-collapse.png";
+}
+
+function toggleSidebar() {
+  const sidebar = document.getElementById("sidebar");
+  const collapsed = sidebar.classList.toggle("collapsed");
+  setSidebarIcon(collapsed);
+  localStorage.setItem("fa-sidebar-collapsed", collapsed ? "1" : "0");
+  applySidebarCollapsed(collapsed);
+  if (!collapsed) closeRecentsOverlay();
+}
+
+// ── Recents overlay ──────────────────────────────────────────
+async function toggleRecentsOverlay() {
+  const overlay = document.getElementById("recents-overlay");
+  if (overlay.classList.contains("open")) { closeRecentsOverlay(); return; }
+  const list = document.getElementById("recents-overlay-list");
+  list.innerHTML = '<p style="font-size:12px;color:var(--text-dim);padding:12px">Loading…</p>';
+  overlay.classList.add("open");
+  document.getElementById("recents-btn").classList.add("active");
+  try {
+    const sessions = await api("GET", "/api/chat/sessions");
+    const top10 = sessions.slice(0, 10);
+    if (!top10.length) {
+      list.innerHTML = '<p style="font-size:12px;color:var(--text-dim);padding:12px">No conversations yet.</p>';
+      return;
+    }
+    list.innerHTML = top10.map(s => `
+      <div class="session-item${s.id === currentSessionId ? " active" : ""}" onclick="loadSessionFromOverlay(${s.id})">
+        <div style="flex:1;min-width:0">
+          <div class="session-title">${escHtml(s.title)}</div>
+          <div class="session-date">${new Date(s.created_at).toLocaleDateString()}</div>
+        </div>
+      </div>`).join("");
+  } catch(e) {
+    list.innerHTML = `<p style="font-size:12px;color:var(--danger-text);padding:12px">${e.message}</p>`;
+  }
+}
+
+function closeRecentsOverlay() {
+  document.getElementById("recents-overlay").classList.remove("open");
+  const btn = document.getElementById("recents-btn");
+  if (btn) btn.classList.remove("active");
+}
+
+async function loadSessionFromOverlay(sessionId) {
+  closeRecentsOverlay();
+  if (currentSection !== "chat") openSidebarSection("chat");
+  await loadSession(sessionId);
+}
+
+document.addEventListener("click", e => {
+  const overlay = document.getElementById("recents-overlay");
+  if (!overlay.classList.contains("open")) return;
+  if (!overlay.contains(e.target) && !e.target.closest("#recents-btn")) closeRecentsOverlay();
+});
+
+// Load saved collapse state
+if (localStorage.getItem("fa-sidebar-collapsed") === "1") {
+  document.getElementById("sidebar").classList.add("collapsed");
+  setSidebarIcon(true);
+  applySidebarCollapsed(true);
+}
+
+// ── Sidebar section switching ────────────────────────────────
+function openSidebarSection(section) {
+  currentSection = section;
+
+  // Update sidebar tabs
+  document.querySelectorAll(".stab").forEach(el =>
+    el.classList.toggle("active", el.dataset.section === section));
+
+  // Update sidebar panels
+  document.getElementById("sidebar-jobs").classList.toggle("active", section === "jobs");
+  document.getElementById("sidebar-chat").classList.toggle("active", section === "chat");
+  document.getElementById("sidebar-runs-tab").classList.toggle("active", section === "runs");
+
+  // Re-apply collapsed visibility for the newly active panel
+  const isCollapsed = document.getElementById("sidebar").classList.contains("collapsed");
+  if (isCollapsed) applySidebarCollapsed(true);
+
+  // Update main view
+  if (section === "jobs") {
+    document.getElementById("runs-view").classList.remove("active");
+    document.getElementById("chat-view").classList.remove("active");
+    if (currentJob) {
+      document.getElementById("job-view").style.display = "flex";
+    } else {
+      document.getElementById("job-view").style.display = "flex";
+    }
+  } else if (section === "chat") {
+    document.getElementById("job-view").style.display = "none";
+    document.getElementById("runs-view").classList.remove("active");
+    document.getElementById("chat-view").classList.add("active");
+    loadSessions();
+    document.getElementById("chat-input").focus();
+  } else if (section === "runs") {
+    document.getElementById("job-view").style.display = "none";
+    document.getElementById("chat-view").classList.remove("active");
+    document.getElementById("runs-view").classList.add("active");
+    loadRuns();
+  }
+}
+
+// ── API helper ───────────────────────────────────────────────
 async function api(method, path, body) {
   const opts = { method, headers: {} };
   if (body !== undefined) {
@@ -262,10 +802,10 @@ function toast(msg, type = "success") {
 
 function fmtNext(iso) {
   if (!iso) return "Not scheduled";
-  const d = new Date(iso);
-  return "Next run: " + d.toLocaleString();
+  return "Next run: " + new Date(iso).toLocaleString();
 }
 
+// ── Jobs ─────────────────────────────────────────────────────
 async function loadJobs() {
   const jobs = await api("GET", "/api/jobs");
   const list = document.getElementById("job-list");
@@ -274,36 +814,40 @@ async function loadJobs() {
     const el = document.createElement("div");
     el.className = "job-item";
     el.dataset.id = j.id;
-    el.innerHTML = `<div>${j.name}</div><div class="job-next">${fmtNext(j.next_run_time)}</div>`;
+    const icon = JOB_ICONS[j.id] || "⚙️";
+    el.innerHTML = `
+      <div class="job-name-row">
+        <span class="job-icon">${icon}</span>
+        <span class="job-name-text">${j.name}</span>
+      </div>
+      <div class="job-next">${fmtNext(j.next_run_time)}</div>`;
     el.onclick = () => selectJob(j.id);
     list.appendChild(el);
   }
 }
 
 async function selectJob(jobId) {
-  _deactivateAll();
   currentJob = jobId;
-  document.getElementById("job-view").style.display = "flex";
 
-  document.querySelectorAll(".job-item").forEach(el => {
-    el.classList.toggle("active", el.dataset.id === jobId);
-  });
+  // Ensure jobs tab is active in sidebar
+  openSidebarSection("jobs");
+
+  document.querySelectorAll(".job-item").forEach(el =>
+    el.classList.toggle("active", el.dataset.id === jobId));
+
+  document.getElementById("job-view").style.display = "flex";
 
   const jobs = await api("GET", "/api/jobs");
   const job = jobs.find(j => j.id === jobId);
-  document.getElementById("job-title").textContent = job.name;
+  const icon = JOB_ICONS[jobId] || "⚙️";
+  document.getElementById("job-title").innerHTML = `${icon} ${job.name}`;
   document.getElementById("job-next").textContent = fmtNext(job.next_run_time);
 
   const tabs = document.getElementById("tabs");
   const promptTab = document.getElementById("prompt-tab");
   tabs.style.display = "flex";
-  if (JOBS_WITH_PROMPTS.has(jobId)) {
-    promptTab.style.display = "";
-  } else {
-    promptTab.style.display = "none";
-    // ensure schedule tab is active
-    activateTab("schedule");
-  }
+  promptTab.style.display = JOBS_WITH_PROMPTS.has(jobId) ? "" : "none";
+  if (!JOBS_WITH_PROMPTS.has(jobId)) activateTab("schedule");
 
   await renderSchedulePanel(jobId);
   if (JOBS_WITH_PROMPTS.has(jobId)) await renderPromptPanel(jobId);
@@ -316,7 +860,7 @@ async function renderSchedulePanel(jobId) {
     : '<span class="badge badge-default">default</span>';
 
   document.getElementById("panel-schedule").innerHTML = `
-    <h3 style="margin-bottom:16px;font-size:16px">Cron Schedule ${badgeHtml}</h3>
+    <h3 style="margin-bottom:16px;font-size:16px">📅 Cron Schedule ${badgeHtml}</h3>
     <div class="form-row">
       ${["minute","hour","day","month","day_of_week"].map(f => `
         <div class="field">
@@ -327,9 +871,8 @@ async function renderSchedulePanel(jobId) {
     <p class="hint">Standard cron syntax. Use * for any, */n for every n, comma-separated values, or ranges (e.g. 1-5).</p>
     <div class="btn-row">
       <button class="btn-primary" onclick="saveSchedule()">Save Schedule</button>
-      <button class="btn-run" onclick="triggerJob()">Run Now</button>
-    </div>
-  `;
+      <button class="btn-run" onclick="triggerJob()">▶ Run Now</button>
+    </div>`;
 }
 
 async function renderPromptPanel(jobId) {
@@ -339,14 +882,13 @@ async function renderPromptPanel(jobId) {
     : '<span class="badge badge-default">default</span>';
 
   document.getElementById("panel-prompt").innerHTML = `
-    <h3 style="margin-bottom:12px;font-size:16px">System Prompt ${badgeHtml}</h3>
+    <h3 style="margin-bottom:12px;font-size:16px">✍️ System Prompt ${badgeHtml}</h3>
     <p class="prompt-hint">⚠️ Runtime placeholders like <code>{date}</code> and <code>{month}</code> are filled in automatically — keep them in your prompt.</p>
     <textarea id="prompt-text">${escHtml(system_prompt)}</textarea>
     <div class="btn-row" style="margin-top:14px">
       <button class="btn-primary" onclick="savePrompt()">Save Prompt</button>
       <button class="btn-danger" onclick="resetPrompt()">Reset to Default</button>
-    </div>
-  `;
+    </div>`;
 }
 
 function escHtml(s) {
@@ -356,8 +898,7 @@ function escHtml(s) {
 // Tab switching
 document.getElementById("tabs").addEventListener("click", e => {
   const tab = e.target.closest(".tab");
-  if (!tab) return;
-  activateTab(tab.dataset.tab);
+  if (tab) activateTab(tab.dataset.tab);
 });
 
 function activateTab(name) {
@@ -368,14 +909,12 @@ function activateTab(name) {
 async function saveSchedule() {
   if (!currentJob) return;
   const fields = {};
-  for (const f of ["minute","hour","day","month","day_of_week"]) {
+  for (const f of ["minute","hour","day","month","day_of_week"])
     fields[f] = document.getElementById(`cron-${f}`).value.trim();
-  }
   try {
     const res = await api("PUT", `/api/jobs/${currentJob}/schedule`, fields);
     toast(`Schedule saved. Next run: ${res.next_run_time ? new Date(res.next_run_time).toLocaleString() : "unknown"}`);
     await loadJobs();
-    // refresh next run display
     document.getElementById("job-next").textContent = fmtNext(res.next_run_time);
     await renderSchedulePanel(currentJob);
   } catch(e) { toast(e.message, "error"); }
@@ -403,14 +942,13 @@ async function resetPrompt() {
   if (!currentJob) return;
   if (!confirm("Reset to default prompt?")) return;
   try {
-    const res = await api("DELETE", `/api/jobs/${currentJob}/prompt`);
+    await api("DELETE", `/api/jobs/${currentJob}/prompt`);
     toast("Prompt reset to default.");
     await renderPromptPanel(currentJob);
   } catch(e) { toast(e.message, "error"); }
 }
 
-// ── Running job tracking ─────────────────────────────────────────────────────
-
+// ── Running job tracking ─────────────────────────────────────
 let _runningJobs = {};
 
 function elapsed(isoStart) {
@@ -422,30 +960,21 @@ function elapsed(isoStart) {
 
 function connectRunningStream() {
   const es = new EventSource("/api/jobs/running/stream");
-  es.onmessage = e => {
-    _runningJobs = JSON.parse(e.data);
-    updateRunningIndicators();
-  };
-  es.onerror = () => {
-    es.close();
-    // Reconnect after 5 s if the stream drops
-    setTimeout(connectRunningStream, 5000);
-  };
+  es.onmessage = e => { _runningJobs = JSON.parse(e.data); updateRunningIndicators(); };
+  es.onerror = () => { es.close(); setTimeout(connectRunningStream, 5000); };
 }
 
 function updateRunningIndicators() {
-  // Sidebar dots
   document.querySelectorAll(".job-item").forEach(el => {
     const jobId = el.dataset.id;
     const startedAt = _runningJobs[jobId];
     let dot = el.querySelector(".run-dot");
     let elapsedEl = el.querySelector(".run-elapsed");
-
     if (startedAt) {
       if (!dot) {
         dot = document.createElement("span");
         dot.className = "run-dot";
-        el.querySelector("div").appendChild(dot);
+        el.querySelector(".job-name-row").appendChild(dot);
       }
       if (!elapsedEl) {
         elapsedEl = document.createElement("div");
@@ -459,7 +988,6 @@ function updateRunningIndicators() {
     }
   });
 
-  // Header badge for selected job
   const badge = document.getElementById("running-badge");
   const startedAt = currentJob ? _runningJobs[currentJob] : null;
   if (startedAt) {
@@ -478,35 +1006,178 @@ function updateRunningIndicators() {
   }
 }
 
-// Init
-loadJobs();
-setInterval(loadJobs, 600000);
-connectRunningStream();
-// Refresh elapsed text every second without re-fetching
-setInterval(updateRunningIndicators, 1000);
-
-// ── View switching helpers ───────────────────────────────────────────────────
-
-function _deactivateAll() {
-  document.querySelectorAll(".job-item").forEach(el => el.classList.remove("active"));
-  document.querySelectorAll(".nav-link").forEach(el => el.classList.remove("active"));
-  document.getElementById("job-view").style.display = "none";
-  document.getElementById("chat-view").classList.remove("active");
-  document.getElementById("runs-view").classList.remove("active");
-  currentJob = null;
+// ── Runs ─────────────────────────────────────────────────────
+function fmtDuration(secs) {
+  if (secs == null) return "—";
+  if (secs < 60) return secs.toFixed(1) + "s";
+  return `${Math.floor(secs/60)}m ${Math.round(secs%60)}s`;
 }
 
-// ── Chat ────────────────────────────────────────────────────────────────────
+function fmtDatetime(iso) {
+  return iso ? new Date(iso).toLocaleString() : "—";
+}
 
+function toggleTrace(id) {
+  const row = document.getElementById(id);
+  const toggle = row.previousElementSibling.querySelector(".trace-toggle");
+  const hidden = row.style.display === "none";
+  row.style.display = hidden ? "" : "none";
+  toggle.textContent = hidden ? "▼ trace" : "▶ trace";
+}
+
+let _runsData = [];
+let _runsSort = { col: "id", dir: "desc" };
+
+const RUNS_COLS = [
+  { key: "id",               label: "#" },
+  { key: "job_name",         label: "Job" },
+  { key: "started_at",       label: "Started" },
+  { key: "duration_seconds", label: "Duration" },
+  { key: "status",           label: "Status" },
+  { key: null,               label: "Error" },
+];
+
+function sortRuns(col) {
+  if (!col) return;
+  if (_runsSort.col === col) {
+    _runsSort.dir = _runsSort.dir === "asc" ? "desc" : "asc";
+  } else {
+    _runsSort.col = col;
+    _runsSort.dir = col === "id" || col === "started_at" ? "desc" : "asc";
+  }
+  applyRunsFilters();
+}
+
+function renderRunsTable(data) {
+  const body = document.getElementById("runs-body");
+  const { col, dir } = _runsSort;
+  const sorted = [...data].sort((a, b) => {
+    let av = a[col], bv = b[col];
+    if (av == null) av = "";
+    if (bv == null) bv = "";
+    const cmp = typeof av === "number" ? av - bv : String(av).localeCompare(String(bv));
+    return dir === "asc" ? cmp : -cmp;
+  });
+
+  const headers = RUNS_COLS.map(c => {
+    const isSorted = c.key && c.key === col;
+    const arrow = c.key ? `<span class="sort-arrow">${isSorted ? (dir === "asc" ? "▲" : "▼") : "▼"}</span>` : "";
+    const onclick = c.key ? `onclick="sortRuns('${c.key}')"` : "";
+    return `<th class="${isSorted ? "sorted" : ""}" ${onclick}>${c.label}${arrow}</th>`;
+  }).join("");
+
+  const rows = sorted.map(r => {
+    const traceId = `trace-${r.id}`;
+    const mainRow = `<tr>
+      <td style="color:var(--text-dim)">${r.id}</td>
+      <td>${r.job_name}</td>
+      <td style="white-space:nowrap">${fmtDatetime(r.started_at)}</td>
+      <td style="white-space:nowrap">${fmtDuration(r.duration_seconds)}</td>
+      <td class="status-${r.status}">${r.status}</td>
+      <td class="error-cell">
+        ${r.error ? escHtml(r.error) : ''}
+        ${r.trace ? `<span class="trace-toggle" onclick="toggleTrace('${traceId}')">▶ trace</span>` : ''}
+      </td>
+    </tr>`;
+    const traceRow = r.trace ? `<tr class="trace-row" id="${traceId}" style="display:none">
+      <td colspan="6"><pre class="trace-pre">${escHtml(r.trace)}</pre></td>
+    </tr>` : '';
+    return mainRow + traceRow;
+  }).join("");
+
+  const countEl = document.getElementById("runs-count");
+  if (countEl) {
+    const total = _runsData.length;
+    countEl.textContent = data.length < total
+      ? `Showing ${data.length} of ${total} runs`
+      : `${total} run${total !== 1 ? "s" : ""}`;
+  }
+
+  body.innerHTML = sorted.length
+    ? `<table class="runs-table"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table>`
+    : '<p class="runs-empty">No runs match the current filters.</p>';
+}
+
+function applyRunsFilters() {
+  const job       = document.getElementById("filter-job")?.value || "";
+  const preset    = document.getElementById("filter-date-preset")?.value || "";
+  const dateFrom  = document.getElementById("filter-date-from")?.value || "";
+  const dateTo    = document.getElementById("filter-date-to")?.value || "";
+  const status    = document.getElementById("filter-status")?.value || "";
+  const durMinRaw = document.getElementById("filter-dur-min")?.value;
+  const durMaxRaw = document.getElementById("filter-dur-max")?.value;
+  const durMin    = durMinRaw !== "" ? parseFloat(durMinRaw) : null;
+  const durMax    = durMaxRaw !== "" ? parseFloat(durMaxRaw) : null;
+
+  let filtered = _runsData;
+
+  if (job) filtered = filtered.filter(r => r.job_name === job);
+
+  if (preset && preset !== "custom") {
+    const ms = { "1d": 864e5, "7d": 7 * 864e5, "30d": 30 * 864e5 }[preset];
+    const cutoff = Date.now() - ms;
+    filtered = filtered.filter(r => r.started_at && new Date(r.started_at).getTime() >= cutoff);
+  } else if (preset === "custom") {
+    if (dateFrom) filtered = filtered.filter(r => r.started_at && new Date(r.started_at) >= new Date(dateFrom));
+    if (dateTo)   {
+      const end = new Date(dateTo); end.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(r => r.started_at && new Date(r.started_at) <= end);
+    }
+  }
+
+  if (status)  filtered = filtered.filter(r => r.status === status);
+  if (durMin !== null) filtered = filtered.filter(r => r.duration_seconds != null && r.duration_seconds >= durMin);
+  if (durMax !== null) filtered = filtered.filter(r => r.duration_seconds != null && r.duration_seconds <= durMax);
+
+  renderRunsTable(filtered);
+}
+
+function onDatePresetChange() {
+  const preset = document.getElementById("filter-date-preset").value;
+  document.getElementById("date-custom").style.display = preset === "custom" ? "flex" : "none";
+  applyRunsFilters();
+}
+
+function clearRunsFilters() {
+  document.getElementById("filter-job").value = "";
+  document.getElementById("filter-date-preset").value = "";
+  document.getElementById("date-custom").style.display = "none";
+  document.getElementById("filter-date-from").value = "";
+  document.getElementById("filter-date-to").value = "";
+  document.getElementById("filter-status").value = "";
+  document.getElementById("filter-dur-min").value = "";
+  document.getElementById("filter-dur-max").value = "";
+  applyRunsFilters();
+}
+
+function populateJobFilter() {
+  const sel = document.getElementById("filter-job");
+  if (!sel) return;
+  const current = sel.value;
+  const jobs = [...new Set(_runsData.map(r => r.job_name).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All jobs</option>' +
+    jobs.map(j => `<option value="${j}"${j === current ? " selected" : ""}>${j}</option>`).join("");
+}
+
+async function loadRuns() {
+  const body = document.getElementById("runs-body");
+  try {
+    _runsData = await api("GET", "/api/job-runs?limit=100");
+    if (!_runsData.length) {
+      body.innerHTML = '<p class="runs-empty">No job runs recorded yet.</p>';
+      const countEl = document.getElementById("runs-count");
+      if (countEl) countEl.textContent = "";
+      return;
+    }
+    populateJobFilter();
+    applyRunsFilters();
+  } catch(e) {
+    body.innerHTML = `<p class="runs-empty">Failed to load runs: ${e.message}</p>`;
+  }
+}
+
+// ── Chat ─────────────────────────────────────────────────────
 let currentSessionId = null;
-
-function openChat() {
-  _deactivateAll();
-  document.getElementById("chat-link").classList.add("active");
-  document.getElementById("chat-view").classList.add("active");
-  loadSessions();
-  document.getElementById("chat-input").focus();
-}
 
 function newChat() {
   currentSessionId = null;
@@ -519,7 +1190,7 @@ async function loadSessions() {
   try {
     const sessions = await api("GET", "/api/chat/sessions");
     if (!sessions.length) {
-      list.innerHTML = '<p style="font-size:12px;color:#5a6080;padding:12px">No conversations yet.</p>';
+      list.innerHTML = '<p style="font-size:12px;color:var(--text-dim);padding:12px">No conversations yet.</p>';
       return;
     }
     list.innerHTML = sessions.map(s => `
@@ -531,7 +1202,7 @@ async function loadSessions() {
         <span class="session-del" title="Delete" onclick="deleteSession(event,${s.id})">✕</span>
       </div>`).join("");
   } catch(e) {
-    list.innerHTML = `<p style="font-size:12px;color:#f87171;padding:12px">${e.message}</p>`;
+    list.innerHTML = `<p style="font-size:12px;color:var(--danger-text);padding:12px">${e.message}</p>`;
   }
 }
 
@@ -539,7 +1210,6 @@ async function loadSession(sessionId) {
   currentSessionId = sessionId;
   document.querySelectorAll(".session-item").forEach(el =>
     el.classList.toggle("active", Number(el.dataset.id) === sessionId));
-
   const container = document.getElementById("chat-messages");
   container.innerHTML = "";
   try {
@@ -567,92 +1237,14 @@ async function deleteSession(event, sessionId) {
   } catch(e) { toast(e.message, "error"); }
 }
 
-// ── Job Runs ─────────────────────────────────────────────────────────────────
-
-function openRuns() {
-  _deactivateAll();
-  document.getElementById("runs-link").classList.add("active");
-  document.getElementById("runs-view").classList.add("active");
-  loadRuns();
-}
-
-function fmtDuration(secs) {
-  if (secs == null) return "—";
-  if (secs < 60) return secs.toFixed(1) + "s";
-  const m = Math.floor(secs / 60), s = Math.round(secs % 60);
-  return `${m}m ${s}s`;
-}
-
-function fmtDatetime(iso) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString();
-}
-
-function toggleTrace(id) {
-  const row = document.getElementById(id);
-  const toggle = row.previousElementSibling.querySelector(".trace-toggle");
-  const hidden = row.style.display === "none";
-  row.style.display = hidden ? "" : "none";
-  toggle.textContent = hidden ? "▼ trace" : "▶ trace";
-}
-
-async function loadRuns() {
-  const body = document.getElementById("runs-body");
-  try {
-    const runs = await api("GET", "/api/job-runs?limit=100");
-    if (!runs.length) {
-      body.innerHTML = '<p class="runs-empty">No job runs recorded yet.</p>';
-      return;
-    }
-    const rows = runs.map((r, i) => {
-      const hasTrace = !!r.trace;
-      const traceId = `trace-${r.id}`;
-      const mainRow = `
-        <tr>
-          <td style="color:#5a6080">${r.id}</td>
-          <td>${r.job_name}</td>
-          <td style="white-space:nowrap">${fmtDatetime(r.started_at)}</td>
-          <td style="white-space:nowrap">${fmtDuration(r.duration_seconds)}</td>
-          <td class="status-${r.status}">${r.status}</td>
-          <td class="error-cell">
-            ${r.error ? escHtml(r.error) : ''}
-            ${hasTrace ? `<span class="trace-toggle" onclick="toggleTrace('${traceId}')">▶ trace</span>` : ''}
-          </td>
-        </tr>`;
-      const traceRow = hasTrace ? `
-        <tr class="trace-row" id="${traceId}" style="display:none">
-          <td colspan="6"><pre class="trace-pre">${escHtml(r.trace)}</pre></td>
-        </tr>` : '';
-      return mainRow + traceRow;
-    }).join("");
-
-    body.innerHTML = `
-      <table class="runs-table">
-        <thead>
-          <tr>
-            <th>#</th><th>Job</th><th>Started</th><th>Duration</th><th>Status</th><th>Error</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>`;
-  } catch(e) {
-    body.innerHTML = `<p class="runs-empty">Failed to load runs: ${e.message}</p>`;
-  }
-}
-
+// ── Chat messaging ───────────────────────────────────────────
 function renderAssistantContent(text) {
   const frag = document.createDocumentFragment();
   const thinkRe = /<think>([\s\S]*?)<\/think>/g;
   let last = 0, match;
-
   while ((match = thinkRe.exec(text)) !== null) {
     const before = text.slice(last, match.index).trim();
-    if (before) {
-      const d = document.createElement("div");
-      d.className = "md-content";
-      d.innerHTML = marked.parse(before);
-      frag.appendChild(d);
-    }
+    if (before) { const d = document.createElement("div"); d.className = "md-content"; d.innerHTML = marked.parse(before); frag.appendChild(d); }
     const details = document.createElement("details");
     details.className = "think-block";
     const summary = document.createElement("summary");
@@ -665,22 +1257,14 @@ function renderAssistantContent(text) {
     frag.appendChild(details);
     last = thinkRe.lastIndex;
   }
-
   const rest = text.slice(last).trim();
-  if (rest) {
-    const d = document.createElement("div");
-    d.className = "md-content";
-    d.innerHTML = marked.parse(rest);
-    frag.appendChild(d);
-  }
-
+  if (rest) { const d = document.createElement("div"); d.className = "md-content"; d.innerHTML = marked.parse(rest); frag.appendChild(d); }
   return frag;
 }
 
 function appendMessage(role, text) {
   const container = document.getElementById("chat-messages");
-  const empty = container.querySelector(".chat-empty");
-  if (empty) empty.remove();
+  container.querySelector(".chat-empty")?.remove();
   const wrap = document.createElement("div");
   wrap.className = `chat-msg ${role}`;
   const label = document.createElement("div");
@@ -704,16 +1288,13 @@ async function sendChat() {
   const input = document.getElementById("chat-input");
   const msg = input.value.trim();
   if (!msg) return;
-
   input.value = "";
   input.style.height = "auto";
   document.getElementById("chat-send").disabled = true;
 
   appendMessage("user", msg);
 
-  // Build the assistant message wrapper manually so we can update it in place
   const container = document.getElementById("chat-messages");
-  container.querySelector(".chat-empty")?.remove();
   const wrap = document.createElement("div");
   wrap.className = "chat-msg assistant";
   const label = document.createElement("div");
@@ -730,16 +1311,10 @@ async function sendChat() {
   container.appendChild(wrap);
   container.scrollTop = container.scrollHeight;
 
-  let fullReply = "";
-  let initialized = false;
+  let fullReply = "", initialized = false;
 
-  function setStatus(text) {
-    statusEl.textContent = text;
-    statusEl.style.display = "flex";
-  }
-  function clearStatus() {
-    statusEl.style.display = "none";
-  }
+  function setStatus(text) { statusEl.textContent = text; statusEl.style.display = "flex"; }
+  function clearStatus()   { statusEl.style.display = "none"; }
 
   function makeThinkBlock(content, open) {
     const details = document.createElement("details");
@@ -758,32 +1333,23 @@ async function sendChat() {
   function updateStreamingBubble() {
     if (!initialized) { clearStatus(); initialized = true; }
     bubble.innerHTML = "";
-
     const thinkRe = /<think>([\s\S]*?)<\/think>/g;
     let last = 0, match;
-
-    // Render each complete <think> block as a collapsed collapsible
     while ((match = thinkRe.exec(fullReply)) !== null) {
       const before = fullReply.slice(last, match.index).trim();
       if (before) { const d = document.createElement("div"); d.textContent = before; bubble.appendChild(d); }
       bubble.appendChild(makeThinkBlock(match[1].trim(), false));
       last = thinkRe.lastIndex;
     }
-
     const rest = fullReply.slice(last);
     const openIdx = rest.indexOf("<think>");
-
     if (openIdx !== -1) {
-      // An in-progress <think> block — show it open and streaming
       const before = rest.slice(0, openIdx).trim();
       if (before) { const d = document.createElement("div"); d.textContent = before; bubble.appendChild(d); }
       bubble.appendChild(makeThinkBlock(rest.slice(openIdx + 7), true));
     } else if (rest.trim()) {
-      const d = document.createElement("div");
-      d.textContent = rest.trim();
-      bubble.appendChild(d);
+      const d = document.createElement("div"); d.textContent = rest.trim(); bubble.appendChild(d);
     }
-
     container.scrollTop = container.scrollHeight;
   }
 
@@ -797,69 +1363,57 @@ async function sendChat() {
       const err = await response.json().catch(() => ({ detail: response.statusText }));
       throw new Error(err.detail || response.statusText);
     }
-
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let sseBuffer = "";
-
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       sseBuffer += decoder.decode(value, { stream: true });
       const lines = sseBuffer.split("\n");
       sseBuffer = lines.pop();
-
       for (const line of lines) {
         if (!line.startsWith("data: ")) continue;
         let event;
         try { event = JSON.parse(line.slice(6)); } catch { continue; }
-
         if (event.type === "session") {
-          if (currentSessionId !== event.session_id) {
-            currentSessionId = event.session_id;
-            loadSessions();
-          }
+          if (currentSessionId !== event.session_id) { currentSessionId = event.session_id; loadSessions(); }
         } else if (event.type === "tool") {
-          setStatus(`Calling ${event.name.replace(/_/g, " ")}…`);
+          setStatus(`Calling ${event.name.replace(/_/g," ")}…`);
         } else if (event.type === "token") {
-          fullReply += event.text;
-          updateStreamingBubble();
+          fullReply += event.text; updateStreamingBubble();
         } else if (event.type === "reset") {
-          fullReply = "";
-          initialized = false;
-          bubble.innerHTML = "";
-          setStatus("Thinking…");
+          fullReply = ""; initialized = false; bubble.innerHTML = ""; setStatus("Thinking…");
         } else if (event.type === "done") {
-          // Replace streaming DOM with fully-rendered markdown + collapsible think
-          bubble.innerHTML = "";
-          bubble.appendChild(renderAssistantContent(event.reply || fullReply));
+          bubble.innerHTML = ""; bubble.appendChild(renderAssistantContent(event.reply || fullReply));
           container.scrollTop = container.scrollHeight;
         } else if (event.type === "error") {
-          clearStatus();
-          bubble.textContent = "Error: " + event.text;
+          clearStatus(); bubble.textContent = "Error: " + event.text;
         }
       }
     }
   } catch(e) {
-    clearStatus();
-    bubble.textContent = "Error: " + e.message;
+    clearStatus(); bubble.textContent = "Error: " + e.message;
   } finally {
     document.getElementById("chat-send").disabled = false;
     input.focus();
   }
 }
 
-// Auto-resize textarea and submit on Enter (Shift+Enter for newline)
+// Auto-resize textarea + Enter to send
 document.getElementById("chat-input").addEventListener("keydown", e => {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
-    sendChat();
-  }
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); }
 });
 document.getElementById("chat-input").addEventListener("input", function() {
   this.style.height = "auto";
   this.style.height = Math.min(this.scrollHeight, 120) + "px";
 });
+
+// ── Init ─────────────────────────────────────────────────────
+loadJobs();
+setInterval(loadJobs, 600000);
+connectRunningStream();
+setInterval(updateRunningIndicators, 1000);
 </script>
 </body>
 </html>
