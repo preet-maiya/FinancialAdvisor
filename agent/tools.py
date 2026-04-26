@@ -490,7 +490,8 @@ async def get_portfolio_daily_pnl() -> str:
             pnl_sign = "+" if pos_day_pnl >= 0 else ""
             lines.append(
                 f"  {symbol} [{h.account}]  {h.quantity:.4f} units"
-                f"  @ ${current:.2f} ({sign}{day_change_pct:.2f}%)"
+                f"  @ ${current:.2f}"
+                f"  |  Stock day chg%: {sign}{day_change_pct:.2f}%"
                 f"  |  Value: ${pos_value:,.2f}"
                 f"  |  Day P&L: {pnl_sign}${pos_day_pnl:,.2f}"
             )

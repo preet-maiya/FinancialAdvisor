@@ -177,7 +177,7 @@ async def investment_tracker() -> AnalysisResult:
         "Step 2: Use calculate to get the total portfolio % change: calculate('day_pnl / (total_value - day_pnl) * 100'). "
         "Step 3: Identify the top 3 best and worst movers by absolute day P&L. "
         "Step 4: For each top mover, call web_search('[ticker] stock news today') to find the reason it moved. "
-        "Use the stock's own daily % directly from get_portfolio_daily_pnl — do not recompute per-stock percentages. "
+        "For each stock's %, use the 'Stock day chg%' field from the tool output — never use the dollar Day P&L value as a percentage. "
         "Be specific with dollar amounts and percentages."
     )
     result = await _run_analysis("investment_tracker", system, message)

@@ -174,7 +174,7 @@ Rules:
 - Keep under 350 words
 - Format for Telegram with emoji
 - For the total portfolio % change, use the calculate tool: calculate("day_pnl / (total_value - day_pnl) * 100")
-- For individual stock %, use the value directly from get_portfolio_daily_pnl — do NOT recompute it
+- For individual stock %, use the "Stock day chg%" field from get_portfolio_daily_pnl (e.g. "+1.20%"). NEVER use the dollar Day P&L as a percentage — these are different fields.
 - After identifying the top movers, use web_search to find why they moved (e.g. "TSM stock news today"). Summarize in 1 sentence per stock — only include if you find a clear reason.
 
 Structure your response exactly as:
