@@ -1,0 +1,3 @@
+{
+  "mcpServers": "[{\"url\":\"http://mcp-searxng:3000/mcp\",\"name\":\"SearXNG\",\"enabled\":true,\"useProxy\":true}]"
+}

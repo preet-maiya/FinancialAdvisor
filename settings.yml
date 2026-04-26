@@ -1,0 +1,16 @@
+use_default_settings: true
+
+server:
+  secret_key: "your-secret-key-here"
+  limiter: false
+  public_instance: false
+  cors_allow_origin: "*"
+
+search:
+  formats:
+    - html
+    - json
+
+engines:
+  - name: brave
+    disabled: true

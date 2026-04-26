@@ -15,6 +15,28 @@ services:
     networks:
       - fa-net
 
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    volumes:
+      - ./settings.yml:/etc/searxng/settings.yml
+    networks:
+      - fa-net
+    restart: unless-stopped
+
+  mcp-searxng:
+    image: node:20-alpine
+    container_name: mcp-searxng
+    entrypoint: ["npx", "-y", "mcp-searxng"]
+    environment:
+      - SEARXNG_URL=http://searxng:8080
+      - MCP_HTTP_PORT=3000
+    networks:
+      - fa-net
+    restart: unless-stopped
+    depends_on:
+      - searxng
+
   llama-gemma4:
     profiles: [gemma4]
     image: ghcr.io/ggml-org/llama.cpp:server
@@ -23,6 +45,7 @@ services:
       - "8080:8080"
     volumes:
       - ./models:/models
+      - ./webui-config.json:/webui-config.json
     networks:
       - fa-net
     healthcheck:
@@ -43,6 +66,8 @@ services:
       --n-predict -1
       --jinja
       --repeat-penalty 1.1
+      --webui-mcp-proxy
+      --webui-config-file /webui-config.json
 
   llama-qwen3:
     profiles: [qwen3]
@@ -52,6 +77,7 @@ services:
       - "8080:8080"
     volumes:
       - ./models:/models
+      - ./webui-config.json:/webui-config.json
     networks:
       - fa-net
     healthcheck:
@@ -74,6 +100,7 @@ services:
       --chat-template chatml
       --reverse-prompt "<|im_end|>"
       --webui-mcp-proxy
+      --webui-config-file /webui-config.json
 
 networks:
   fa-net:
