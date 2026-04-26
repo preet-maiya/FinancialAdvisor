@@ -42,6 +42,9 @@ WEB_PORT = int(os.getenv("WEB_PORT", "8000"))
 # Finnhub
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "")
 
+# SearXNG
+SEARXNG_URL = os.getenv("SEARXNG_URL", "http://searxng:8080")
+
 # Timezone — read from TZ env var, then /etc/timezone, then fall back to UTC
 def _load_tz() -> pytz.BaseTzInfo:
     name = os.environ.get("TZ")

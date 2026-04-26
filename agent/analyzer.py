@@ -173,9 +173,12 @@ async def investment_tracker() -> AnalysisResult:
     message = (
         "/no_think "
         f"Today is {today}. Generate the daily investment P&L update. "
-        "Use get_portfolio_daily_pnl for today's P&L data. "
-        "Use get_investment_holdings_summary to list all holdings with their day change. "
-        "Focus on what moved today. Be specific with dollar amounts and percentages."
+        "Step 1: Use get_portfolio_daily_pnl to get P&L data for all holdings. "
+        "Step 2: Use calculate to get the total portfolio % change: calculate('day_pnl / (total_value - day_pnl) * 100'). "
+        "Step 3: Identify the top 3 best and worst movers by absolute day P&L. "
+        "Step 4: For each top mover, call web_search('[ticker] stock news today') to find the reason it moved. "
+        "Use the stock's own daily % directly from get_portfolio_daily_pnl — do not recompute per-stock percentages. "
+        "Be specific with dollar amounts and percentages."
     )
     result = await _run_analysis("investment_tracker", system, message)
     await repo.save_analysis_result(result)

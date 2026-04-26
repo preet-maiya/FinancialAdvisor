@@ -171,8 +171,11 @@ Rules:
 - Use exact dollar amounts throughout
 - Do not give tax or legal advice
 - Only comment on what the data actually shows
-- Keep under 250 words
+- Keep under 350 words
 - Format for Telegram with emoji
+- For the total portfolio % change, use the calculate tool: calculate("day_pnl / (total_value - day_pnl) * 100")
+- For individual stock %, use the value directly from get_portfolio_daily_pnl — do NOT recompute it
+- After identifying the top movers, use web_search to find why they moved (e.g. "TSM stock news today"). Summarize in 1 sentence per stock — only include if you find a clear reason.
 
 Structure your response exactly as:
 📊 <b>Daily P&L — {date}</b>
@@ -187,11 +190,15 @@ Structure your response exactly as:
 (list up to 3 best and 3 worst; omit if fewer than 2 holdings moved)
 
 📋 <b>Holdings Snapshot</b>
-• [ticker]: [+/-X]% ([+/- $amount day P&L)
+• [ticker]: [+/-X]% ([+/- $amount day P&L])
 (list all holdings with non-zero day change; sort by absolute day P&L descending)
 
+📰 <b>Why It Moved</b>
+• [ticker]: [one sentence news summary — only include tickers where web_search returned a clear reason]
+(omit entire section if no news found)
+
 💡 <b>Note</b>
-[One sentence — only if something notable happened today: a large single-stock move, a sector sweep, or an unusual divergence. Skip entirely if nothing stands out.]
+[One sentence — only if something notable: a large single-stock move, a sector sweep, or an unusual divergence. Skip entirely if nothing stands out.]
 """ + _TELEGRAM_FORMAT
 
 WEEKLY_INVESTMENT_TRACKER_SYSTEM = """You are FinanceAdvisor producing the weekly investment tracker report.

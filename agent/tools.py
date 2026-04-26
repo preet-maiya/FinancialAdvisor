@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
@@ -545,6 +544,101 @@ async def get_stock_prices(symbols: list[str]) -> str:
     return "\n".join(lines)
 
 
+@tool
+async def web_search(query: str, max_results: int = 5) -> str:
+    """Search the web for news and information via SearXNG.
+    Use this to look up why a stock moved, recent earnings, or market news.
+    Example: web_search("TSM stock news today") or web_search("NVDA earnings April 2026")
+    """
+    if not config.SEARXNG_URL:
+        return "Web search is not configured (SEARXNG_URL not set)."
+
+    params = {
+        "q": query,
+        "format": "json",
+        "categories": "news,general",
+        "language": "en",
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{config.SEARXNG_URL}/search",
+                params=params,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status != 200:
+                    return f"Search failed: HTTP {resp.status}"
+                data = await resp.json()
+    except Exception as e:
+        return f"Search error: {e}"
+
+    results = data.get("results", [])[:max_results]
+    if not results:
+        return f"No results found for: {query}"
+
+    lines = [f"Search results for '{query}':"]
+    for r in results:
+        title = r.get("title", "").strip()
+        snippet = r.get("content", "").strip()
+        published = r.get("publishedDate", "")
+        date_str = f" [{published[:10]}]" if published else ""
+        lines.append(f"\n• {title}{date_str}")
+        if snippet:
+            lines.append(f"  {snippet[:200]}")
+    return "\n".join(lines)
+
+
+@tool
+def calculate(expression: str) -> str:
+    """Safely evaluate a mathematical expression and return the result.
+    Supports: +, -, *, /, **, (, ), and basic math (abs, round, min, max).
+    Use this whenever you need to derive a number — percentages, deltas, ratios, etc.
+    Example: calculate("1766.06 / (131682.50 - 1766.06) * 100") -> portfolio day change %
+    """
+    import ast
+    import operator
+
+    _ops = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.Pow: operator.pow,
+        ast.USub: operator.neg,
+        ast.UAdd: operator.pos,
+    }
+    _safe_funcs = {
+        "abs": abs,
+        "round": round,
+        "min": min,
+        "max": max,
+    }
+
+    def _eval(node):
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return node.value
+        if isinstance(node, ast.BinOp) and type(node.op) in _ops:
+            left, right = _eval(node.left), _eval(node.right)
+            if type(node.op) is ast.Div and right == 0:
+                raise ZeroDivisionError("Division by zero")
+            return _ops[type(node.op)](left, right)
+        if isinstance(node, ast.UnaryOp) and type(node.op) in _ops:
+            return _ops[type(node.op)](_eval(node.operand))
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in _safe_funcs:
+            args = [_eval(a) for a in node.args]
+            return _safe_funcs[node.func.id](*args)
+        raise ValueError(f"Unsupported expression: {ast.dump(node)}")
+
+    try:
+        tree = ast.parse(expression.strip(), mode="eval")
+        result = _eval(tree.body)
+        return f"{result:g}"
+    except ZeroDivisionError:
+        return "Error: division by zero"
+    except Exception as e:
+        return f"Error: {e}"
+
+
 ALL_TOOLS = [
     get_spending_by_category,
     get_top_merchants,
@@ -562,4 +656,6 @@ ALL_TOOLS = [
     calculate_pnl_for_symbols,
     get_portfolio_daily_pnl,
     get_stock_prices,
+    web_search,
+    calculate,
 ]
