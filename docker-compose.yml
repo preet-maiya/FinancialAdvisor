@@ -1,6 +1,6 @@
 services:
   financeadvisor:
-    build: .
+    image: ghcr.io/preet-maiya/financialadvisor:latest
     container_name: financeadvisor
     env_file: .env
     ports:

@@ -1,0 +1,6 @@
+# Local development override — builds from source instead of pulling from GHCR.
+# Docker Compose merges this automatically when both files are present.
+services:
+  financeadvisor:
+    build: .
+    image: null

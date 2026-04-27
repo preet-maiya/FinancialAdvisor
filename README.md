@@ -198,6 +198,47 @@ journalctl -u financeadvisor -f
 
 ---
 
+## CI/CD — Build and Deploy
+
+### How it works
+
+- **GitHub Actions** (`build.yml`) builds the Docker image and pushes it to GHCR on every push to `main`. That's all it does.
+- **Deployment** is handled separately by a webhook listener on the homelab, which pulls the new image and restarts the container when notified.
+
+The two concerns are intentionally decoupled — CI never touches the server, and the server doesn't need GitHub credentials.
+
+### GHCR authentication (no setup needed)
+
+The workflow authenticates to GHCR using the built-in `GITHUB_TOKEN`. No PATs or extra secrets are required. The `packages: write` permission in the workflow job is enough to push to `ghcr.io/preet-maiya/financialadvisor`.
+
+The image is **public** by default if the repository is public. If the repository is private, the image is also private and you'll need to `docker login ghcr.io` before pulling.
+
+### Pulling the image locally for testing
+
+```bash
+echo $GITHUB_TOKEN | docker login ghcr.io -u preet-maiya --password-stdin
+docker pull ghcr.io/preet-maiya/financialadvisor:latest
+```
+
+Or run it directly with compose (pulls automatically):
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+### Local development (build from source)
+
+`docker-compose.override.yml` is present in the repo root. Docker Compose merges it automatically, so `docker compose up` builds from source locally instead of pulling from GHCR:
+
+```bash
+docker compose up --build   # builds from local source
+```
+
+On the homelab, there is no override file, so `docker compose pull && docker compose up -d` uses the GHCR image directly.
+
+---
+
 ## Project Structure
 
 ```
