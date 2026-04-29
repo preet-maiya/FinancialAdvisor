@@ -47,6 +47,10 @@ def _run_job(job_id: str, coro_factory: Callable[[], Awaitable]) -> None:
         try:
             logger.info("Running %s...", job_name)
             await coro_factory()
+        except asyncio.CancelledError:
+            status = "cancelled"
+            error = "Cancelled by user"
+            logger.info("%s was cancelled.", job_name)
         except Exception as e:
             status = "error"
             error = str(e)

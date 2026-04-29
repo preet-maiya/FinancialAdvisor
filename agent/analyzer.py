@@ -10,14 +10,20 @@ import agent.prompts as prompts
 from data.models import AnalysisResult
 import storage.repository as repo
 from web.repository import get_prompt_override
+import job_state
 
 logger = logging.getLogger(__name__)
 
 
 async def _run_analysis(analysis_type: str, system_prompt: str, user_message: str) -> AnalysisResult:
     llm_logger = LLMLogger()
+    cancel_event = job_state.get_cancel_event(analysis_type)
     try:
-        raw = await run_react(get_llm(llm_logger), ALL_TOOLS, system_prompt, user_message)
+        raw = await run_react(
+            get_llm(llm_logger), ALL_TOOLS, system_prompt, user_message,
+            on_tool_call=lambda: job_state.increment_tool_calls(analysis_type),
+            cancel_event=cancel_event,
+        )
         return AnalysisResult(
             timestamp=datetime.now(),
             type=analysis_type,
@@ -223,8 +229,12 @@ async def stock_research_agent() -> AnalysisResult:
         web_search, calculate,
     )
 
+    _job_id = "stock_research"
+    _on_tool_call = lambda: job_state.increment_tool_calls(_job_id)
+
     try:
         # Stage 1 — Holdings Agent (portfolio tools only, no web search)
+        job_state.update_stage(_job_id, "holdings")
         stage1_system = await get_prompt_override("stock_research_holdings") or prompts.STOCK_HOLDINGS_SYSTEM
         stage1_message = (
             "/no_think "
@@ -237,10 +247,12 @@ async def stock_research_agent() -> AnalysisResult:
             stage1_system,
             stage1_message,
             max_steps=5,
+            on_tool_call=_on_tool_call,
         )
         logger.info("Stock research Stage 1 (Holdings) complete. Output: %d chars", len(stage1_result))
 
         # Stage 2 — Discovery Agent (web search only, fresh context)
+        job_state.update_stage(_job_id, "discovery")
         stage2_system = await get_prompt_override("stock_research_discovery") or prompts.STOCK_DISCOVERY_SYSTEM
         stage2_message = (
             "/no_think "
@@ -254,10 +266,12 @@ async def stock_research_agent() -> AnalysisResult:
             stage2_system,
             stage2_message,
             max_steps=12,
+            on_tool_call=_on_tool_call,
         )
         logger.info("Stock research Stage 2 (Discovery) complete. Output: %d chars", len(stage2_result))
 
         # Stage 3 — Per-Ticker Parallel Agents (each with fresh context)
+        job_state.update_stage(_job_id, "ticker research")
         ticker_batches = _parse_ticker_batches(stage2_result)
         logger.info("Stock research Stage 3: %d ticker batches to research in parallel.", len(ticker_batches))
 
@@ -276,6 +290,7 @@ async def stock_research_agent() -> AnalysisResult:
                 stage3_system,
                 message,
                 max_steps=8,
+                on_tool_call=_on_tool_call,
             )
 
         stage3_raw = await asyncio.gather(
@@ -294,6 +309,7 @@ async def stock_research_agent() -> AnalysisResult:
                     sum(1 for r in stage3_raw if not isinstance(r, Exception)), len(stage3_raw))
 
         # Stage 4 — Synthesis Agent (fresh context, all summaries as input)
+        job_state.update_stage(_job_id, "synthesis")
         stage4_system = await get_prompt_override("stock_research_synthesis") or prompts.STOCK_SYNTHESIS_SYSTEM
         stage4_message = (
             "/no_think "
@@ -307,6 +323,7 @@ async def stock_research_agent() -> AnalysisResult:
             stage4_system,
             stage4_message,
             max_steps=5,
+            on_tool_call=_on_tool_call,
         )
         logger.info("Stock research Stage 4 (Synthesis) complete.")
 
@@ -320,7 +337,7 @@ async def stock_research_agent() -> AnalysisResult:
         result = AnalysisResult(
             timestamp=datetime.now(),
             type="stock_research",
-            summary=stage4_result[:500],
+            summary=stage4_result,
             alerts=[],
             raw_response=combined,
             model=config.LLAMA_CPP_MODEL_ID,

@@ -311,6 +311,14 @@ async def chat(body: ChatBody):
     return {"reply": reply, "session_id": session_id}
 
 
+@app.post("/api/jobs/{job_id}/cancel", status_code=202)
+async def cancel_job(job_id: str):
+    import job_state
+    if not job_state.request_cancel(job_id):
+        raise HTTPException(status_code=404, detail="Job is not currently running")
+    return {"ok": True}
+
+
 @app.post("/api/jobs/{job_id}/trigger", status_code=202)
 async def trigger_job(job_id: str):
     if job_id not in JOB_DEFAULTS:

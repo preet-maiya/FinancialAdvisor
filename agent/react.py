@@ -4,10 +4,12 @@ Gemma 4's template (--chat-template gemma4 with --jinja) supports system role
 but not native tool calling, so we embed tool descriptions in the system prompt
 and parse JSON tool calls from the model's output.
 """
+import asyncio
 import json
 import logging
 import re
-from typing import Any
+import threading
+from typing import Any, Callable
 
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.tools import BaseTool
@@ -84,6 +86,8 @@ async def run_react_stream(
     user_message: str,
     history: list[dict] | None = None,
     max_steps: int = MAX_STEPS,
+    on_tool_call: "Callable[[], None] | None" = None,
+    cancel_event: "threading.Event | None" = None,
 ):
     """
     Async generator yielding dicts:
@@ -114,12 +118,17 @@ async def run_react_stream(
     consecutive_redirects = 0
 
     for step in range(max_steps):
+        if cancel_event and cancel_event.is_set():
+            raise asyncio.CancelledError("Job cancelled")
+
         full_text = ""
         tool_call_seen = False
         streamed_any = False
         in_think = False
 
         async for chunk in llm.astream(messages):
+            if cancel_event and cancel_event.is_set():
+                break
             token = chunk.content
             if not token:
                 continue
@@ -136,6 +145,9 @@ async def run_react_stream(
                     if not in_think:
                         yield {"type": "token", "text": token}
                         streamed_any = True
+
+        if cancel_event and cancel_event.is_set():
+            raise asyncio.CancelledError("Job cancelled")
 
         reply = THINK_RE.sub("", full_text).strip()
         logger.info("[ReAct stream step %d] output: %s", step + 1, reply[:300])
@@ -194,11 +206,15 @@ async def run_react_stream(
 
         results = []
         for raw in tool_calls:
+            if cancel_event and cancel_event.is_set():
+                raise asyncio.CancelledError("Job cancelled")
             try:
                 call = json.loads(raw)
                 name = call["name"]
                 args = call.get("arguments", {})
                 yield {"type": "tool", "name": name}
+                if on_tool_call:
+                    on_tool_call()
                 tool = tool_map.get(name)
                 if tool is None:
                     results.append(f"Tool '{name}' not found.")
@@ -206,6 +222,8 @@ async def run_react_stream(
                 logger.debug("[ReAct stream] calling %s(%s)", name, args)
                 result = await tool.ainvoke(args)
                 results.append(f"Tool '{name}' result:\n{result}")
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
                 results.append(f"Tool call failed: {e}")
 
@@ -215,6 +233,8 @@ async def run_react_stream(
         ))
 
     logger.warning("ReAct stream loop reached max steps (%d)", max_steps)
+    if cancel_event and cancel_event.is_set():
+        raise asyncio.CancelledError("Job cancelled")
     messages.append(HumanMessage(content=(
         "You have reached the maximum number of tool calls. "
         "Based on the tool results above, write your final answer now. "
@@ -222,6 +242,8 @@ async def run_react_stream(
     )))
     final_reply = ""
     async for chunk in llm.astream(messages):
+        if cancel_event and cancel_event.is_set():
+            break
         token = chunk.content
         if token:
             final_reply += token
@@ -236,6 +258,8 @@ async def run_react(
     user_message: str,
     history: list[dict] | None = None,
     max_steps: int = MAX_STEPS,
+    on_tool_call: Callable[[], None] | None = None,
+    cancel_event: "threading.Event | None" = None,
 ) -> str:
     tool_map = {t.name: t for t in tools}
     tool_descriptions = _build_tool_descriptions(tools)
@@ -263,6 +287,8 @@ async def run_react(
     consecutive_redirects = 0
 
     for step in range(max_steps):
+        if cancel_event and cancel_event.is_set():
+            raise asyncio.CancelledError("Job cancelled")
         try:
             response = await llm.ainvoke(messages)
         except Exception as e:
@@ -322,10 +348,14 @@ async def run_react(
 
         results = []
         for raw in tool_calls:
+            if cancel_event and cancel_event.is_set():
+                raise asyncio.CancelledError("Job cancelled")
             try:
                 call = json.loads(raw)
                 name = call["name"]
                 args = call.get("arguments", {})
+                if on_tool_call:
+                    on_tool_call()
                 tool = tool_map.get(name)
                 if tool is None:
                     results.append(f"Tool '{name}' not found.")
@@ -333,6 +363,8 @@ async def run_react(
                 logger.debug("[ReAct] calling %s(%s)", name, args)
                 result = await tool.ainvoke(args)
                 results.append(f"Tool '{name}' result:\n{result}")
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
                 results.append(f"Tool call failed: {e}")
 
@@ -340,6 +372,8 @@ async def run_react(
         messages.append(HumanMessage(content=f"Tool results:\n\n{tool_results}\n\nContinue. If you have enough data to answer, write your final answer now instead of calling more tools."))
 
     logger.warning("ReAct loop reached max steps (%d)", max_steps)
+    if cancel_event and cancel_event.is_set():
+        raise asyncio.CancelledError("Job cancelled")
     # Ask the model to produce a final answer from what it has gathered so far
     messages.append(HumanMessage(
         content=(

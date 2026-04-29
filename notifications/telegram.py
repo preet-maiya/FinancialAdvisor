@@ -121,10 +121,7 @@ def _strip_think(text: str) -> str:
 
 
 async def send_digest(result: AnalysisResult) -> bool:
-    text = _strip_think(result.raw_response)
-    # Truncate if too long for Telegram (4096 char limit)
-    if len(text) > 4000:
-        text = text[:3990] + "\n\n<i>[truncated]</i>"
+    text = _strip_think(result.summary)
     return await send_message(text)
 
 
