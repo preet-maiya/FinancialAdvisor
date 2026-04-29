@@ -211,9 +211,28 @@ async def weekly_investment_tracker() -> AnalysisResult:
 
 
 def _parse_ticker_batches(discovery_text: str, batch_size: int = 2) -> list[list[str]]:
-    """Extract ticker symbols from discovery output and group into batches."""
-    tickers = list(dict.fromkeys(re.findall(r'\b([A-Z]{1,5})\b', discovery_text)))
-    skip = {"ETF", "CEO", "GDP", "EPS", "PE", "USA", "US", "NYSE", "HOLD", "BUY", "SELL", "AI", "QE"}
+    """Extract ticker symbols from Stage 2 JSON output and group into batches."""
+    import json
+    try:
+        match = re.search(r'\{[\s\S]*\}', discovery_text)
+        if match:
+            data = json.loads(match.group())
+            tickers = []
+            for item in data.get("held_signals", []):
+                if "ticker" in item:
+                    tickers.append(item["ticker"])
+            for item in data.get("new_candidates", []):
+                if "ticker" in item:
+                    tickers.append(item["ticker"])
+            tickers = list(dict.fromkeys(tickers))
+            if tickers:
+                logger.info("Stage 2 JSON parsed: %d tickers extracted.", len(tickers))
+                return [tickers[i:i + batch_size] for i in range(0, len(tickers), batch_size)]
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        logger.warning("Stage 2 JSON parse failed, falling back to regex: %s", e)
+    # Fallback: regex heuristic
+    skip = {"ETF", "CEO", "GDP", "EPS", "PE", "USA", "US", "NYSE", "HOLD", "HELD", "BUY", "SELL", "AI", "QE", "NEW", "FOR", "NOT", "ALL", "TOP", "THE"}
+    tickers = list(dict.fromkeys(re.findall(r'\b([A-Z]{2,5})\b', discovery_text)))
     tickers = [t for t in tickers if t not in skip]
     return [tickers[i:i + batch_size] for i in range(0, len(tickers), batch_size)]
 
@@ -313,8 +332,9 @@ async def stock_research_agent() -> AnalysisResult:
         stage4_system = await get_prompt_override("stock_research_synthesis") or prompts.STOCK_SYNTHESIS_SYSTEM
         stage4_message = (
             "/no_think "
-            f"Today is {today}. Here are the per-ticker research summaries:\n\n"
-            f"{stage3_combined}\n\n"
+            f"Today is {today}.\n\n"
+            f"=== STAGE 2: DISCOVERY (JSON) ===\n{stage2_result}\n\n"
+            f"=== STAGE 3: PER-TICKER RESEARCH (JSON) ===\n{stage3_combined}\n\n"
             "Synthesize into the final Telegram-formatted buy/hold/sell report with 3 action items."
         )
         stage4_result = await run_react(
