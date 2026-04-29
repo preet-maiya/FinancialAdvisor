@@ -42,6 +42,7 @@ JOB_DEFAULTS = {
     "weekly_investment_tracker": {"minute": "0",  "hour": "18",   "day": "*", "month": "*", "day_of_week": "sun"},
     "snapshot_investments":      {"minute": "30", "hour": "13",   "day": "*", "month": "*", "day_of_week": "*"},
     "sync_transactions":         {"minute": "30", "hour": "*/6",  "day": "*", "month": "*", "day_of_week": "*"},
+    "stock_research":            {"minute": "0",  "hour": "10",   "day": "*", "month": "*", "day_of_week": "sat"},
 }
 
 JOB_NAMES = {
@@ -53,6 +54,7 @@ JOB_NAMES = {
     "weekly_investment_tracker": "Weekly Investment Tracker",
     "snapshot_investments":      "Snapshot Investments",
     "sync_transactions":         "Sync Transactions",
+    "stock_research":            "Stock Research",
 }
 
 PROMPT_DEFAULTS = {
@@ -62,6 +64,11 @@ PROMPT_DEFAULTS = {
     "monthly_review":            prompts.MONTHLY_REVIEW_SYSTEM,
     "investment_tracker":        prompts.INVESTMENT_TRACKER_SYSTEM,
     "weekly_investment_tracker": prompts.WEEKLY_INVESTMENT_TRACKER_SYSTEM,
+    "stock_research":            prompts.STOCK_RESEARCH_SYSTEM,
+    "stock_research_holdings":   prompts.STOCK_HOLDINGS_SYSTEM,
+    "stock_research_discovery":  prompts.STOCK_DISCOVERY_SYSTEM,
+    "stock_research_ticker":     prompts.STOCK_TICKER_RESEARCH_SYSTEM,
+    "stock_research_synthesis":  prompts.STOCK_SYNTHESIS_SYSTEM,
 }
 
 

@@ -204,6 +204,151 @@ async def weekly_investment_tracker() -> AnalysisResult:
     return result
 
 
+def _parse_ticker_batches(discovery_text: str, batch_size: int = 2) -> list[list[str]]:
+    """Extract ticker symbols from discovery output and group into batches."""
+    tickers = list(dict.fromkeys(re.findall(r'\b([A-Z]{1,5})\b', discovery_text)))
+    skip = {"ETF", "CEO", "GDP", "EPS", "PE", "USA", "US", "NYSE", "HOLD", "BUY", "SELL", "AI", "QE"}
+    tickers = [t for t in tickers if t not in skip]
+    return [tickers[i:i + batch_size] for i in range(0, len(tickers), batch_size)]
+
+
+async def stock_research_agent() -> AnalysisResult:
+    import asyncio
+    today = datetime.now().strftime("%B %d, %Y")
+    llm_logger = LLMLogger()
+
+    from agent.tools import (
+        get_investment_holdings_summary, get_portfolio_symbols,
+        get_investment_accounts_summary, get_net_worth_trend,
+        web_search, calculate,
+    )
+
+    try:
+        # Stage 1 — Holdings Agent (portfolio tools only, no web search)
+        stage1_system = await get_prompt_override("stock_research_holdings") or prompts.STOCK_HOLDINGS_SYSTEM
+        stage1_message = (
+            "/no_think "
+            f"Today is {today}. Fetch all portfolio data and output the compact holdings table."
+        )
+        stage1_result = await run_react(
+            get_llm(llm_logger),
+            [get_investment_holdings_summary, get_portfolio_symbols,
+             get_investment_accounts_summary, get_net_worth_trend],
+            stage1_system,
+            stage1_message,
+            max_steps=5,
+        )
+        logger.info("Stock research Stage 1 (Holdings) complete. Output: %d chars", len(stage1_result))
+
+        # Stage 2 — Discovery Agent (web search only, fresh context)
+        stage2_system = await get_prompt_override("stock_research_discovery") or prompts.STOCK_DISCOVERY_SYSTEM
+        stage2_message = (
+            "/no_think "
+            f"Today is {today}. Here is the current portfolio:\n\n"
+            f"{stage1_result}\n\n"
+            "Research the market and output held-ticker signals + 6-10 new candidates."
+        )
+        stage2_result = await run_react(
+            get_llm(llm_logger),
+            [web_search],
+            stage2_system,
+            stage2_message,
+            max_steps=12,
+        )
+        logger.info("Stock research Stage 2 (Discovery) complete. Output: %d chars", len(stage2_result))
+
+        # Stage 3 — Per-Ticker Parallel Agents (each with fresh context)
+        ticker_batches = _parse_ticker_batches(stage2_result)
+        logger.info("Stock research Stage 3: %d ticker batches to research in parallel.", len(ticker_batches))
+
+        stage3_system = await get_prompt_override("stock_research_ticker") or prompts.STOCK_TICKER_RESEARCH_SYSTEM
+
+        async def research_batch(batch: list[str]) -> str:
+            tickers_str = ", ".join(batch)
+            message = (
+                "/no_think "
+                f"Today is {today}. Research these tickers: {tickers_str}. "
+                "Run 3 searches per ticker as instructed and output the summary blocks."
+            )
+            return await run_react(
+                get_llm(llm_logger),
+                [web_search],
+                stage3_system,
+                message,
+                max_steps=8,
+            )
+
+        stage3_raw = await asyncio.gather(
+            *[research_batch(batch) for batch in ticker_batches],
+            return_exceptions=True,
+        )
+        stage3_summaries = []
+        for i, res in enumerate(stage3_raw):
+            if isinstance(res, Exception):
+                logger.error("Stage 3 batch %d failed: %s", i, res)
+                stage3_summaries.append(f"[Batch {i} research failed: {res}]")
+            else:
+                stage3_summaries.append(res)
+        stage3_combined = "\n\n---\n\n".join(stage3_summaries)
+        logger.info("Stock research Stage 3 complete. %d/%d batches succeeded.",
+                    sum(1 for r in stage3_raw if not isinstance(r, Exception)), len(stage3_raw))
+
+        # Stage 4 — Synthesis Agent (fresh context, all summaries as input)
+        stage4_system = await get_prompt_override("stock_research_synthesis") or prompts.STOCK_SYNTHESIS_SYSTEM
+        stage4_message = (
+            "/no_think "
+            f"Today is {today}. Here are the per-ticker research summaries:\n\n"
+            f"{stage3_combined}\n\n"
+            "Synthesize into the final Telegram-formatted buy/hold/sell report with 3 action items."
+        )
+        stage4_result = await run_react(
+            get_llm(llm_logger),
+            [calculate],
+            stage4_system,
+            stage4_message,
+            max_steps=5,
+        )
+        logger.info("Stock research Stage 4 (Synthesis) complete.")
+
+        combined = "\n\n".join([
+            "=== STAGE 1: HOLDINGS ===", stage1_result,
+            "=== STAGE 2: DISCOVERY ===", stage2_result,
+            "=== STAGE 3: PER-TICKER RESEARCH ===", stage3_combined,
+            "=== STAGE 4: FINAL REPORT ===", stage4_result,
+        ])
+
+        result = AnalysisResult(
+            timestamp=datetime.now(),
+            type="stock_research",
+            summary=stage4_result[:500],
+            alerts=[],
+            raw_response=combined,
+            model=config.LLAMA_CPP_MODEL_ID,
+            prompt_tokens=llm_logger.total_prompt_tokens or None,
+            completion_tokens=llm_logger.total_completion_tokens or None,
+            tokens_per_sec=llm_logger.tokens_per_sec,
+            latency_seconds=round(llm_logger.total_latency_seconds, 3) or None,
+        )
+    except Exception as e:
+        logger.error("Stock research agent failed: %s", e)
+        result = AnalysisResult(
+            timestamp=datetime.now(),
+            type="stock_research",
+            summary=f"Analysis failed: {e}",
+            alerts=[],
+            raw_response=str(e),
+            model=config.LLAMA_CPP_MODEL_ID,
+            prompt_tokens=llm_logger.total_prompt_tokens or None,
+            completion_tokens=llm_logger.total_completion_tokens or None,
+            tokens_per_sec=llm_logger.tokens_per_sec,
+            latency_seconds=round(llm_logger.total_latency_seconds, 3) or None,
+        )
+
+    await repo.save_analysis_result(result)
+    logger.info("Stock research agent complete.")
+    return result
+
+
 async def monthly_review() -> AnalysisResult:
     month = datetime.now().strftime("%B %Y")
     override = await get_prompt_override("monthly_review")

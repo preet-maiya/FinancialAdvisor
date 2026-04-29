@@ -19,6 +19,7 @@ from scheduler.jobs import (
     job_weekly_investment_tracker,
     job_snapshot_investments,
     job_sync_transactions,
+    job_stock_research,
 )
 import web.api as web_api
 
@@ -120,6 +121,15 @@ def main():
         CronTrigger(hour="*/6", minute=30, timezone=TZ),
         id="sync_transactions",
         name="Sync Transactions",
+        replace_existing=True,
+    )
+
+    # Stock research — Saturdays at 10:00
+    scheduler.add_job(
+        job_stock_research,
+        CronTrigger(day_of_week="sat", hour=10, minute=0, timezone=TZ),
+        id="stock_research",
+        name="Stock Research",
         replace_existing=True,
     )
 

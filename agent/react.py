@@ -83,6 +83,7 @@ async def run_react_stream(
     system_prompt: str,
     user_message: str,
     history: list[dict] | None = None,
+    max_steps: int = MAX_STEPS,
 ):
     """
     Async generator yielding dicts:
@@ -112,7 +113,7 @@ async def run_react_stream(
     last_tool_calls: list[str] = []
     consecutive_redirects = 0
 
-    for step in range(MAX_STEPS):
+    for step in range(max_steps):
         full_text = ""
         tool_call_seen = False
         streamed_any = False
@@ -213,7 +214,7 @@ async def run_react_stream(
             content=f"Tool results:\n\n{tool_results}\n\nContinue. If you have enough data to answer, write your final answer now instead of calling more tools."
         ))
 
-    logger.warning("ReAct stream loop reached max steps (%d)", MAX_STEPS)
+    logger.warning("ReAct stream loop reached max steps (%d)", max_steps)
     messages.append(HumanMessage(content=(
         "You have reached the maximum number of tool calls. "
         "Based on the tool results above, write your final answer now. "
@@ -234,6 +235,7 @@ async def run_react(
     system_prompt: str,
     user_message: str,
     history: list[dict] | None = None,
+    max_steps: int = MAX_STEPS,
 ) -> str:
     tool_map = {t.name: t for t in tools}
     tool_descriptions = _build_tool_descriptions(tools)
@@ -260,8 +262,16 @@ async def run_react(
     last_tool_calls: list[str] = []
     consecutive_redirects = 0
 
-    for step in range(MAX_STEPS):
-        response = await llm.ainvoke(messages)
+    for step in range(max_steps):
+        try:
+            response = await llm.ainvoke(messages)
+        except Exception as e:
+            if any(kw in str(e).lower() for kw in ["400", "context", "token", "exceed"]):
+                logger.error(
+                    "[ReAct step %d] Context overflow: %d messages in history. Error: %s",
+                    step + 1, len(messages), e,
+                )
+            raise
         reply = THINK_RE.sub("", response.content).strip()
         logger.info("[ReAct step %d] model output: %s", step + 1, reply[:300])
 
@@ -329,7 +339,7 @@ async def run_react(
         tool_results = "\n\n".join(results)
         messages.append(HumanMessage(content=f"Tool results:\n\n{tool_results}\n\nContinue. If you have enough data to answer, write your final answer now instead of calling more tools."))
 
-    logger.warning("ReAct loop reached max steps (%d)", MAX_STEPS)
+    logger.warning("ReAct loop reached max steps (%d)", max_steps)
     # Ask the model to produce a final answer from what it has gathered so far
     messages.append(HumanMessage(
         content=(

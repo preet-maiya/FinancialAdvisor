@@ -287,6 +287,59 @@
 
   .prompt-hint { font-size: 12px; color: var(--warning); background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); border-radius: 6px; padding: 8px 12px; margin-bottom: 14px; }
 
+  /* ── Flow panel ───────────────────────────────────────────── */
+  .flow-pipeline { display: flex; flex-direction: column; gap: 0; max-width: 780px; }
+  .flow-phase {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden;
+  }
+  .flow-phase-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px; cursor: pointer; user-select: none;
+    border-bottom: 1px solid transparent; transition: background .15s;
+  }
+  .flow-phase-header:hover { background: var(--hover); }
+  .flow-phase.open .flow-phase-header { border-bottom-color: var(--border); }
+  .flow-phase-badge {
+    background: var(--accent); color: #fff; font-size: 11px; font-weight: 700;
+    padding: 2px 9px; border-radius: 20px; flex-shrink: 0;
+  }
+  .flow-phase-title { font-size: 14px; font-weight: 600; flex: 1; }
+  .flow-phase-meta { font-size: 11px; color: var(--text-dim); }
+  .flow-phase-chevron { font-size: 11px; color: var(--text-dim); transition: transform .2s; }
+  .flow-phase.open .flow-phase-chevron { transform: rotate(180deg); }
+  .flow-phase-body { display: none; padding: 16px; }
+  .flow-phase.open .flow-phase-body { display: block; }
+  .flow-phase-body textarea { min-height: 260px; margin-bottom: 12px; }
+  .flow-connector {
+    display: flex; flex-direction: column; align-items: center; gap: 0; padding: 4px 0;
+  }
+  .flow-connector-line { width: 2px; height: 18px; background: var(--border); }
+  .flow-connector-arrow { color: var(--text-dim); font-size: 14px; line-height: 1; }
+  .flow-connector-label {
+    font-size: 10px; color: var(--accent-light); letter-spacing: .06em;
+    background: rgba(99,102,241,.12); border: 1px solid rgba(99,102,241,.25);
+    border-radius: 4px; padding: 2px 8px; margin: 4px 0;
+  }
+  .flow-phase.parallel .flow-phase-badge { background: rgba(245,158,11,.15); color: var(--warning); border-color: rgba(245,158,11,.3); }
+  .flow-parallel-lanes { display: flex; gap: 6px; margin-bottom: 12px; }
+  .flow-parallel-lane {
+    flex: 1; min-width: 0; background: var(--surface2); border: 1px dashed var(--border);
+    border-radius: 6px; padding: 7px 10px; font-size: 11px; color: var(--text-muted);
+    text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .flow-parallel-lane.more { opacity: .6; font-style: italic; }
+  .flow-connector-split {
+    display: flex; flex-direction: column; align-items: center; gap: 0; padding: 4px 0;
+  }
+  .flow-connector-split-lines { display: flex; gap: 24px; align-items: flex-end; height: 18px; }
+  .flow-connector-split-lines span { width: 2px; height: 100%; background: var(--border); display: block; }
+  .flow-connector-split-label {
+    font-size: 10px; color: #fbbf24; letter-spacing: .06em;
+    background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.3);
+    border-radius: 4px; padding: 2px 8px; margin: 4px 0;
+  }
+
   /* Buttons */
   .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
   button { padding: 8px 18px; border-radius: 6px; border: none; font-size: 14px; cursor: pointer; font-weight: 500; transition: opacity .15s, background .15s; }
@@ -520,6 +573,7 @@
     <div class="tabs" id="tabs" style="display:none">
       <div class="tab active" data-tab="schedule">📅 Schedule</div>
       <div class="tab" data-tab="prompt" id="prompt-tab">✍️ Prompt</div>
+      <div class="tab" data-tab="flow" id="flow-tab" style="display:none">🔬 Flow</div>
     </div>
     <div id="content">
       <div class="panel active" id="panel-schedule">
@@ -529,6 +583,7 @@
         </div>
       </div>
       <div class="panel" id="panel-prompt"></div>
+      <div class="panel" id="panel-flow"></div>
     </div>
   </div>
 
@@ -618,7 +673,8 @@
 
 <script>
 // ── Constants ────────────────────────────────────────────────
-const JOBS_WITH_PROMPTS = new Set(["daily_digest","anomaly_check","weekly_report","monthly_review","investment_tracker","weekly_investment_tracker"]);
+const JOBS_WITH_PROMPTS = new Set(["daily_digest","anomaly_check","weekly_report","monthly_review","investment_tracker","weekly_investment_tracker","stock_research"]);
+const JOBS_WITH_FLOW = new Set(["stock_research"]);
 
 const JOB_ICONS = {
   daily_digest:              "📰",
@@ -629,6 +685,7 @@ const JOB_ICONS = {
   weekly_investment_tracker: "📊",
   snapshot_investments:      "📸",
   sync_transactions:         "🔄",
+  stock_research:            "🔬",
 };
 
 let currentJob = null;
@@ -845,12 +902,15 @@ async function selectJob(jobId) {
 
   const tabs = document.getElementById("tabs");
   const promptTab = document.getElementById("prompt-tab");
+  const flowTab = document.getElementById("flow-tab");
   tabs.style.display = "flex";
   promptTab.style.display = JOBS_WITH_PROMPTS.has(jobId) ? "" : "none";
-  if (!JOBS_WITH_PROMPTS.has(jobId)) activateTab("schedule");
+  flowTab.style.display = JOBS_WITH_FLOW.has(jobId) ? "" : "none";
+  if (!JOBS_WITH_PROMPTS.has(jobId) && !JOBS_WITH_FLOW.has(jobId)) activateTab("schedule");
 
   await renderSchedulePanel(jobId);
   if (JOBS_WITH_PROMPTS.has(jobId)) await renderPromptPanel(jobId);
+  if (JOBS_WITH_FLOW.has(jobId)) await renderFlowPanel(jobId);
 }
 
 async function renderSchedulePanel(jobId) {
@@ -889,6 +949,121 @@ async function renderPromptPanel(jobId) {
       <button class="btn-primary" onclick="savePrompt()">Save Prompt</button>
       <button class="btn-danger" onclick="resetPrompt()">Reset to Default</button>
     </div>`;
+}
+
+const FLOW_STAGES = [
+  {
+    id: "stock_research_holdings",  label: "Stage 1", title: "Holdings Agent",
+    meta: "Portfolio tools only · No web search",
+    steps: 5, parallel: false,
+    connector: { label: "holdings table", split: false },
+    hint: "Fetches all portfolio data using get_investment_holdings_summary, get_portfolio_symbols, get_investment_accounts_summary, get_net_worth_trend. No web search — enforced by tool list. Output feeds Stage 2 as context.",
+  },
+  {
+    id: "stock_research_discovery", label: "Stage 2", title: "Discovery Agent",
+    meta: "Web search · Sector trends · 6-10 candidates",
+    steps: 12, parallel: false,
+    connector: { label: "ticker batches → parallel agents", split: true },
+    hint: "Receives Stage 1 holdings table. Uses web_search to find sector momentum and analyst picks. Outputs two lists: held-ticker signals + 6-10 new candidate tickers. These feed Stage 3 in batches of 2.",
+  },
+  {
+    id: "stock_research_ticker",    label: "Stage 3", title: "Per-Ticker Agents",
+    meta: "⚡ Parallel · 1-2 tickers each · 3 searches/ticker · Fresh context",
+    steps: 8, parallel: true,
+    connector: { label: "per-ticker summaries", split: false },
+    hint: "N agents run concurrently via asyncio.gather — each starts with a completely fresh message history. Each agent researches only its assigned tickers: (1) news/outlook, (2) earnings/guidance, (3) price targets/momentum.",
+  },
+  {
+    id: "stock_research_synthesis", label: "Stage 4", title: "Synthesis Agent",
+    meta: "calculate tool · Final report · Telegram HTML",
+    steps: 5, parallel: false,
+    connector: null,
+    hint: "Receives all Stage 3 per-ticker summaries joined with --- separators. Uses calculate() for position sizing. Outputs the final Telegram-formatted buy/hold/sell report with 3 action items.",
+  },
+];
+
+async function renderFlowPanel() {
+  const panel = document.getElementById("panel-flow");
+  panel.innerHTML = '<p style="color:var(--text-dim);font-size:13px">Loading stage prompts…</p>';
+
+  const stages = await Promise.all(
+    FLOW_STAGES.map(s => api("GET", `/api/jobs/${s.id}/prompt`))
+  );
+
+  const cards = FLOW_STAGES.map((s, i) => {
+    const { system_prompt, is_override } = stages[i];
+    const badge = is_override
+      ? '<span class="badge badge-override">custom</span>'
+      : '<span class="badge badge-default">default</span>';
+
+    const parallelPreview = s.parallel ? `
+      <div class="flow-parallel-lanes">
+        <div class="flow-parallel-lane">Agent A<br><span style="font-size:10px;opacity:.7">AAPL, MSFT</span></div>
+        <div class="flow-parallel-lane">Agent B<br><span style="font-size:10px;opacity:.7">NVDA, TSLA</span></div>
+        <div class="flow-parallel-lane">Agent C<br><span style="font-size:10px;opacity:.7">GOOG, META</span></div>
+        <div class="flow-parallel-lane more">+ N more…</div>
+      </div>` : "";
+
+    const connector = s.connector ? (s.connector.split ? `
+      <div class="flow-connector-split">
+        <div class="flow-connector-line" style="width:2px;height:12px;background:var(--border)"></div>
+        <div class="flow-connector-split-label">${s.connector.label}</div>
+        <div class="flow-connector-split-lines"><span></span><span></span><span></span><span style="opacity:.4"></span></div>
+        <div class="flow-connector-arrow" style="color:var(--warning)">▼</div>
+      </div>` : `
+      <div class="flow-connector">
+        <div class="flow-connector-line"></div>
+        <div class="flow-connector-label">${s.connector.label}</div>
+        <div class="flow-connector-line"></div>
+        <div class="flow-connector-arrow">▼</div>
+      </div>`) : "";
+
+    return `
+      <div class="flow-phase${s.parallel ? ' parallel' : ''}" id="flow-stage-${i}">
+        <div class="flow-phase-header" onclick="toggleFlowStage(${i})">
+          <span class="flow-phase-badge">${s.label}</span>
+          <span class="flow-phase-title">${s.title} ${badge}</span>
+          <span class="flow-phase-meta">≤ ${s.steps} steps · ${s.meta}</span>
+          <span class="flow-phase-chevron">▼</span>
+        </div>
+        <div class="flow-phase-body">
+          <p class="prompt-hint">ℹ️ ${escHtml(s.hint)}</p>
+          ${parallelPreview}
+          <textarea id="flow-prompt-${i}">${escHtml(system_prompt)}</textarea>
+          <div class="btn-row">
+            <button class="btn-primary" onclick="saveStagePrompt(${i}, '${s.id}')">Save</button>
+            <button class="btn-danger"  onclick="resetStagePrompt(${i}, '${s.id}')">Reset to Default</button>
+          </div>
+        </div>
+      </div>
+      ${connector}`;
+  }).join("");
+
+  panel.innerHTML = `
+    <h3 style="margin-bottom:20px;font-size:16px">🔬 Research Pipeline — 4-Stage Multi-Agent</h3>
+    <div class="flow-pipeline">${cards}</div>`;
+}
+
+function toggleFlowStage(i) {
+  document.getElementById(`flow-stage-${i}`).classList.toggle("open");
+}
+
+async function saveStagePrompt(i, stageId) {
+  const text = document.getElementById(`flow-prompt-${i}`).value;
+  try {
+    await api("PUT", `/api/jobs/${stageId}/prompt`, { system_prompt: text });
+    toast("Stage prompt saved.");
+    await renderFlowPanel();
+  } catch(e) { toast(e.message, "error"); }
+}
+
+async function resetStagePrompt(i, stageId) {
+  if (!confirm("Reset this stage prompt to default?")) return;
+  try {
+    await api("DELETE", `/api/jobs/${stageId}/prompt`);
+    toast("Stage prompt reset to default.");
+    await renderFlowPanel();
+  } catch(e) { toast(e.message, "error"); }
 }
 
 function escHtml(s) {

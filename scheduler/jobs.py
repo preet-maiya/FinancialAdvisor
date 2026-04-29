@@ -4,7 +4,7 @@ import traceback
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
-from agent.analyzer import daily_digest, anomaly_check, weekly_report, monthly_review, investment_tracker, weekly_investment_tracker, snapshot_investments
+from agent.analyzer import daily_digest, anomaly_check, weekly_report, monthly_review, investment_tracker, weekly_investment_tracker, snapshot_investments, stock_research_agent
 from data.fetcher import get_transactions
 from notifications.telegram import send_digest, send_alert
 import storage.repository as repo
@@ -21,6 +21,7 @@ JOB_NAMES = {
     "weekly_investment_tracker": "Weekly Investment Tracker",
     "snapshot_investments":      "Snapshot Investments",
     "sync_transactions":         "Sync Transactions",
+    "stock_research":            "Stock Research",
 }
 
 
@@ -122,6 +123,20 @@ def job_snapshot_investments():
         count = await snapshot_investments()
         logger.info("Snapshot job saved %d investment positions.", count)
     _run_job("snapshot_investments", _work)
+
+
+def job_stock_research():
+    async def _work():
+        result = await stock_research_agent()
+        if result.summary.startswith("Analysis failed"):
+            err = result.raw_response
+            is_overflow = any(kw in err.lower() for kw in ["400", "context", "token", "exceed"])
+            title = "Stock Research FAILED — Context Overflow" if is_overflow else "Stock Research FAILED"
+            logger.error("Stock research failure: %s", err)
+            await send_alert(title, f"<code>{err[:1000]}</code>", urgency="critical")
+        else:
+            await send_digest(result)
+    _run_job("stock_research", _work)
 
 
 def job_sync_transactions():
