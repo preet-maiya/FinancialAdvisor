@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FinancialAdvisor</title>
+<link rel="icon" type="image/png" href="/static/favicon-dark.png" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" href="/static/favicon-light.png" media="(prefers-color-scheme: light)">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   /* ── Theme variables ──────────────────────────────────────── */
@@ -28,6 +30,8 @@
     --user-bubble:  #6366f1;
     --shadow:       rgba(0,0,0,0.4);
     --icon-filter:  invert(1) opacity(0.7);
+    --logo-bg:      #2a2410;
+    --logo-shadow:  rgba(0,0,0,0.6);
   }
 
   [data-theme="light"] {
@@ -51,6 +55,8 @@
     --user-bubble:  #6366f1;
     --shadow:       rgba(0,0,0,0.1);
     --icon-filter:  opacity(0.6);
+    --logo-bg:      #fff9e6;
+    --logo-shadow:  rgba(0,0,0,0.15);
   }
 
   /* ── Reset ───────────────────────────────────────────────── */
@@ -87,9 +93,9 @@
     border-bottom: 1px solid var(--border);
     gap: 6px;
     flex-shrink: 0;
-    min-height: 50px;
+    min-height: 64px;
   }
-  .app-logo { font-size: 20px; flex-shrink: 0; line-height: 1; }
+  .app-logo { width: 52px; height: 52px; flex-shrink: 0; object-fit: cover; border-radius: 12px; background: var(--logo-bg); padding: 1px; box-shadow: 0 2px 8px var(--logo-shadow); }
   .app-name {
     font-size: 13px;
     font-weight: 700;
@@ -102,9 +108,21 @@
     transition: opacity .2s;
   }
   #sidebar.collapsed .app-name { display: none; }
-  #sidebar.collapsed .app-logo { display: none; }
+  #sidebar.collapsed .app-logo { width: 40px; height: 40px; border-radius: 10px; }
   #sidebar.collapsed #theme-toggle { display: none; }
+  #sidebar.collapsed #collapse-btn { display: none; }
   #sidebar.collapsed #sidebar-header { justify-content: center; }
+
+  /* Logo area — hover to reveal expand icon when collapsed */
+  .logo-area { position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .logo-expand-icon {
+    display: none; position: absolute; inset: 0;
+    align-items: center; justify-content: center;
+    border-radius: 10px; background: var(--hover);
+  }
+  #sidebar.collapsed .logo-area { cursor: pointer; }
+  #sidebar.collapsed .logo-area:hover .app-logo { opacity: 0; }
+  #sidebar.collapsed .logo-area:hover .logo-expand-icon { display: flex; }
 
   .icon-btn {
     background: none;
@@ -154,10 +172,60 @@
   .stab .stab-icon { font-size: 17px; line-height: 1; }
   .stab .stab-label { transition: opacity .2s, max-height .2s; max-height: 20px; overflow: hidden; }
 
+  /* Collapsed tabs: icon-only, stacked vertically */
+  #sidebar.collapsed #sidebar-tabs { flex-direction: column; border-bottom: none; border-top: 1px solid var(--border); }
+  #sidebar.collapsed .stab { flex: none; padding: 10px 0; border-bottom: 2px solid transparent; }
+  #sidebar.collapsed .stab.active { background: rgba(99,102,241,.1); border-bottom-color: transparent; }
+  #sidebar.collapsed .stab-label { display: none; }
+  #sidebar.collapsed #sidebar-content { border-top: 2px solid var(--accent); opacity: 1; }
+
+  /* CSS tooltips for collapsed icons */
+  #sidebar.collapsed .stab,
+  #sidebar.collapsed .cstrip-btn { position: relative; }
+  #sidebar.collapsed .stab::after,
+  #sidebar.collapsed .cstrip-btn::after {
+    content: attr(title);
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 4px 9px;
+    border-radius: 5px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .15s;
+    z-index: 100;
+    box-shadow: 2px 2px 8px var(--shadow);
+  }
+  #sidebar.collapsed .stab:hover::after,
+  #sidebar.collapsed .cstrip-btn:hover::after { opacity: 1; }
+
   /* Sidebar panel content */
   #sidebar-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
   .sidebar-panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
   .sidebar-panel.active { display: flex; }
+
+  /* Selected job header in sidebar */
+  #selected-job-info {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #selected-job-info.visible { display: flex; }
+  #sidebar.collapsed #selected-job-info { display: none; }
+  #selected-job-info-name {
+    font-size: 12px; font-weight: 600; color: var(--accent-light);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;
+  }
 
   /* Job list */
   #job-list { flex: 1; overflow-y: auto; padding: 6px 0; }
@@ -246,7 +314,7 @@
   .session-item.active { background: var(--hover); border-left-color: var(--accent); color: var(--text); }
   .session-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .session-date { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
-  .session-del { opacity: 0; font-size: 13px; color: var(--text-dim); cursor: pointer; padding: 0 2px; flex-shrink: 0; }
+  .session-del { opacity: 0; color: var(--text-dim); cursor: pointer; padding: 0 2px; flex-shrink: 0; }
   .session-item:hover .session-del { opacity: 1; }
   .session-del:hover { color: var(--danger-text); }
 
@@ -372,7 +440,7 @@
 
   /* Empty state */
   .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; min-height: 300px; color: var(--text-dim); font-size: 14px; gap: 12px; padding: 40px; text-align: center; }
-  .empty-icon { font-size: 42px; opacity: .4; }
+  .empty-icon { opacity: .4; }
 
   /* ── Runs view ────────────────────────────────────────────── */
   #runs-view { display: none; flex: 1; flex-direction: column; overflow: hidden; width: 100%; }
@@ -448,7 +516,7 @@
   .chat-input-wrapper { position: relative; flex: 1; display: flex; align-items: flex-end; background: var(--surface); border: 1px solid color-mix(in srgb, var(--border) 60%, transparent); border-radius: 12px; box-shadow: 0 2px 12px var(--shadow), 0 1px 3px rgba(0,0,0,0.08); transition: border-color .15s, box-shadow .15s; padding: 6px 10px; }
   .chat-input-wrapper:focus-within { border-color: color-mix(in srgb, var(--accent) 50%, transparent); box-shadow: 0 4px 16px var(--shadow), 0 1px 4px rgba(0,0,0,0.1); }
   #chat-input { flex: 1; background: transparent; border: none; color: var(--text); padding: 4px 60px 4px 2px; font-size: 14px; outline: none; resize: none; font-family: inherit; line-height: 1.5; min-height: 0 !important; max-height: 120px; }
-  #chat-send { position: absolute; right: 8px; bottom: 7px; padding: 5px 14px; border-radius: 8px; font-size: 13px; }
+  #chat-send { position: absolute; right: 8px; bottom: 7px; padding: 5px 10px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
   .tool-status { font-size: 12px; color: var(--text-muted); font-style: italic; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
   .tool-status::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--accent); border-top-color: transparent; animation: spin .7s linear infinite; flex-shrink: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -510,24 +578,27 @@
 
   <!-- Header -->
   <div id="sidebar-header">
-    <span class="app-logo">💹</span>
+    <div class="logo-area" id="logo-area">
+      <img class="app-logo" src="/static/logo.png" alt="FinAdvisor">
+      <div class="logo-expand-icon"><img src="/static/icons/sidebar-expand.png" style="width:18px;height:18px;opacity:.7;filter:var(--icon-filter)"></div>
+    </div>
     <span class="app-name">FinAdvisor</span>
-    <button class="icon-btn" id="theme-toggle" title="Toggle theme" onclick="toggleTheme()">🌙</button>
+    <button class="icon-btn" id="theme-toggle" title="Toggle theme" onclick="toggleTheme()"><img id="theme-icon" src="/static/icons/moon.svg" style="width:18px;height:18px;filter:var(--icon-filter)"></button>
     <button class="icon-btn" id="collapse-btn" title="Collapse sidebar" onclick="toggleSidebar()"><img id="collapse-icon" src="/static/icons/sidebar-collapse.png" style="width:18px;height:18px;opacity:.7;filter:var(--icon-filter)"></button>
   </div>
 
   <!-- Tab bar -->
   <div id="sidebar-tabs">
-    <div class="stab active" data-section="jobs" onclick="openSidebarSection('jobs')">
-      <span class="stab-icon">⚡</span>
+    <div class="stab active" data-section="jobs" title="Jobs" onclick="openSidebarSection('jobs')">
+      <span class="stab-icon"><img src="/static/icons/zap.svg" style="width:17px;height:17px;filter:var(--icon-filter)"></span>
       <span class="stab-label">JOBS</span>
     </div>
-    <div class="stab" data-section="chat" onclick="openSidebarSection('chat')">
-      <span class="stab-icon">💬</span>
+    <div class="stab" data-section="chat" title="Chat" onclick="openSidebarSection('chat')">
+      <span class="stab-icon"><img src="/static/icons/message-circle.svg" style="width:17px;height:17px;filter:var(--icon-filter)"></span>
       <span class="stab-label">CHAT</span>
     </div>
-    <div class="stab" data-section="runs" onclick="openSidebarSection('runs')">
-      <span class="stab-icon">📊</span>
+    <div class="stab" data-section="runs" title="Runs" onclick="openSidebarSection('runs')">
+      <span class="stab-icon"><img src="/static/icons/bar-chart-2.svg" style="width:17px;height:17px;filter:var(--icon-filter)"></span>
       <span class="stab-label">RUNS</span>
     </div>
   </div>
@@ -537,6 +608,10 @@
 
     <!-- Jobs panel -->
     <div id="sidebar-jobs" class="sidebar-panel active">
+      <div id="selected-job-info">
+        <span id="selected-job-info-icon"></span>
+        <span id="selected-job-info-name"></span>
+      </div>
       <div id="job-list"></div>
     </div>
 
@@ -573,7 +648,7 @@
 <div id="recents-overlay">
   <div id="recents-overlay-header">
     <span>Recent Chats</span>
-    <button class="icon-btn" title="Close" onclick="closeRecentsOverlay()" style="font-size:12px">✕</button>
+    <button class="icon-btn" title="Close" onclick="closeRecentsOverlay()"><img src="/static/icons/x.svg" style="width:14px;height:14px;filter:var(--icon-filter)"></button>
   </div>
   <div id="recents-overlay-list"></div>
 </div>
@@ -588,14 +663,14 @@
       <div class="next" id="job-next" style="display:none"></div>
     </div>
     <div class="tabs" id="tabs" style="display:none">
-      <div class="tab active" data-tab="schedule">📅 Schedule</div>
-      <div class="tab" data-tab="prompt" id="prompt-tab">✍️ Prompt</div>
-      <div class="tab" data-tab="flow" id="flow-tab" style="display:none">🔬 Flow</div>
+      <div class="tab active" data-tab="schedule"><img src="/static/icons/calendar.svg" style="width:13px;height:13px;filter:var(--icon-filter);vertical-align:middle;margin-right:5px">Schedule</div>
+      <div class="tab" data-tab="prompt" id="prompt-tab"><img src="/static/icons/pencil.svg" style="width:13px;height:13px;filter:var(--icon-filter);vertical-align:middle;margin-right:5px">Prompt</div>
+      <div class="tab" data-tab="flow" id="flow-tab" style="display:none"><img src="/static/icons/microscope.svg" style="width:13px;height:13px;filter:var(--icon-filter);vertical-align:middle;margin-right:5px">Flow</div>
     </div>
     <div id="content">
       <div class="panel active" id="panel-schedule">
         <div class="empty-state">
-          <div class="empty-icon">⚡</div>
+          <div class="empty-icon"><img src="/static/icons/zap.svg" style="width:42px;height:42px;filter:var(--icon-filter)"></div>
           <p>Select a job from the sidebar to view its schedule.</p>
         </div>
       </div>
@@ -607,7 +682,7 @@
   <!-- Runs view -->
   <div id="runs-view">
     <div id="runs-header">
-      <h2>📊 Job Runs</h2>
+      <h2><img src="/static/icons/bar-chart-2.svg" style="width:18px;height:18px;filter:var(--icon-filter);vertical-align:middle;margin-right:6px">Job Runs</h2>
       <button class="btn-secondary" onclick="loadRuns()" style="padding:6px 14px;font-size:13px">↻ Refresh</button>
     </div>
 
@@ -668,7 +743,7 @@
   <div id="chat-view">
     <div id="chat-header">
       <div>
-        <h2>💬 Financial Advisor</h2>
+        <h2><img src="/static/icons/message-circle.svg" style="width:18px;height:18px;filter:var(--icon-filter);vertical-align:middle;margin-right:6px">Financial Advisor</h2>
         <p>Ask anything about your spending, budgets, savings, or transactions.</p>
       </div>
     </div>
@@ -679,7 +754,7 @@
     <div id="chat-input-row">
       <div class="chat-input-wrapper">
         <textarea id="chat-input" rows="1" placeholder="Ask about your finances…"></textarea>
-        <button class="btn-primary" id="chat-send" onclick="sendChat()">Send</button>
+        <button class="btn-primary" id="chat-send" onclick="sendChat()"><img src="/static/icons/send-horizontal.svg" style="width:16px;height:16px;filter:invert(1)"></button>
       </div>
     </div>
   </div>
@@ -694,16 +769,20 @@ const JOBS_WITH_PROMPTS = new Set(["daily_digest","anomaly_check","weekly_report
 const JOBS_WITH_FLOW = new Set(["stock_research"]);
 
 const JOB_ICONS = {
-  daily_digest:              "📰",
-  anomaly_check:             "🔍",
-  weekly_report:             "📈",
-  monthly_review:            "📋",
-  investment_tracker:        "💰",
-  weekly_investment_tracker: "📊",
-  snapshot_investments:      "📸",
-  sync_transactions:         "🔄",
-  stock_research:            "🔬",
+  daily_digest:              "newspaper",
+  anomaly_check:             "search",
+  weekly_report:             "trending-up",
+  monthly_review:            "clipboard-list",
+  investment_tracker:        "coins",
+  weekly_investment_tracker: "bar-chart-2",
+  snapshot_investments:      "camera",
+  sync_transactions:         "refresh-cw",
+  stock_research:            "microscope",
 };
+
+function iconImg(name, size=16) {
+  return `<img src="/static/icons/${name}.svg" style="width:${size}px;height:${size}px;filter:var(--icon-filter);vertical-align:middle">`;
+}
 
 const JOB_NAMES = {
   daily_digest:              "Daily Digest",
@@ -723,7 +802,7 @@ let currentSection = "jobs";
 // ── Theme ────────────────────────────────────────────────────
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
-  document.getElementById("theme-toggle").textContent = theme === "dark" ? "🌙" : "☀️";
+  document.getElementById("theme-icon").src = theme === "dark" ? "/static/icons/moon.svg" : "/static/icons/sun.svg";
   localStorage.setItem("fa-theme", theme);
 }
 
@@ -737,8 +816,6 @@ applyTheme(localStorage.getItem("fa-theme") || "dark");
 
 // ── Sidebar collapse ─────────────────────────────────────────
 function applySidebarCollapsed(collapsed) {
-  document.getElementById("sidebar-tabs").style.display = collapsed ? "none" : "";
-
   document.querySelectorAll(".expanded-only").forEach(el => {
     el.style.display = collapsed ? "none" : "";
   });
@@ -814,6 +891,11 @@ document.addEventListener("click", e => {
   const overlay = document.getElementById("recents-overlay");
   if (!overlay.classList.contains("open")) return;
   if (!overlay.contains(e.target) && !e.target.closest("#recents-btn")) closeRecentsOverlay();
+});
+
+// Logo area click → expand when collapsed
+document.getElementById("logo-area").addEventListener("click", () => {
+  if (document.getElementById("sidebar").classList.contains("collapsed")) toggleSidebar();
 });
 
 // Load saved collapse state
@@ -900,7 +982,7 @@ async function loadJobs() {
     const el = document.createElement("div");
     el.className = "job-item";
     el.dataset.id = j.id;
-    const icon = JOB_ICONS[j.id] || "⚙️";
+    const icon = iconImg(JOB_ICONS[j.id] || "settings-2");
     el.innerHTML = `
       <div class="job-name-row">
         <span class="job-icon">${icon}</span>
@@ -925,9 +1007,14 @@ async function selectJob(jobId) {
 
   const jobs = await api("GET", "/api/jobs");
   const job = jobs.find(j => j.id === jobId);
-  const icon = JOB_ICONS[jobId] || "⚙️";
+  const icon = iconImg(JOB_ICONS[jobId] || "settings-2", 18);
   document.getElementById("job-title").innerHTML = `${icon} ${job.name}`;
   document.getElementById("job-next").textContent = fmtNext(job.next_run_time);
+
+  const infoEl = document.getElementById("selected-job-info");
+  document.getElementById("selected-job-info-icon").innerHTML = iconImg(JOB_ICONS[jobId] || "settings-2", 14);
+  document.getElementById("selected-job-info-name").textContent = job.name;
+  infoEl.classList.add("visible");
 
   const tabs = document.getElementById("tabs");
   const promptTab = document.getElementById("prompt-tab");
@@ -949,7 +1036,7 @@ async function renderSchedulePanel(jobId) {
     : '<span class="badge badge-default">default</span>';
 
   document.getElementById("panel-schedule").innerHTML = `
-    <h3 style="margin-bottom:16px;font-size:16px">📅 Cron Schedule ${badgeHtml}</h3>
+    <h3 style="margin-bottom:16px;font-size:16px">${iconImg("calendar",15)} Cron Schedule ${badgeHtml}</h3>
     <div class="form-row">
       ${["minute","hour","day","month","day_of_week"].map(f => `
         <div class="field">
@@ -961,7 +1048,7 @@ async function renderSchedulePanel(jobId) {
     <div class="btn-row">
       <button class="btn-primary" onclick="saveSchedule()">Save Schedule</button>
       <button class="btn-run" onclick="triggerJob()">▶ Run Now</button>
-      <button class="btn-danger" id="cancel-job-btn" onclick="cancelJob()" style="display:none">✕ Cancel</button>
+      <button class="btn-danger" id="cancel-job-btn" onclick="cancelJob()" style="display:none">${iconImg("x",12)} Cancel</button>
     </div>`;
 }
 
@@ -972,8 +1059,8 @@ async function renderPromptPanel(jobId) {
     : '<span class="badge badge-default">default</span>';
 
   document.getElementById("panel-prompt").innerHTML = `
-    <h3 style="margin-bottom:12px;font-size:16px">✍️ System Prompt ${badgeHtml}</h3>
-    <p class="prompt-hint">⚠️ Runtime placeholders like <code>{date}</code> and <code>{month}</code> are filled in automatically — keep them in your prompt.</p>
+    <h3 style="margin-bottom:12px;font-size:16px">${iconImg("pencil",15)} System Prompt ${badgeHtml}</h3>
+    <p class="prompt-hint">${iconImg("triangle-alert",13)} Runtime placeholders like <code>{date}</code> and <code>{month}</code> are filled in automatically — keep them in your prompt.</p>
     <textarea id="prompt-text">${escHtml(system_prompt)}</textarea>
     <div class="btn-row" style="margin-top:14px">
       <button class="btn-primary" onclick="savePrompt()">Save Prompt</button>
@@ -1057,7 +1144,7 @@ async function renderFlowPanel() {
           <span class="flow-phase-chevron">▼</span>
         </div>
         <div class="flow-phase-body">
-          <p class="prompt-hint">ℹ️ ${escHtml(s.hint)}</p>
+          <p class="prompt-hint">${iconImg("info",13)} ${escHtml(s.hint)}</p>
           ${parallelPreview}
           <textarea id="flow-prompt-${i}">${escHtml(system_prompt)}</textarea>
           <div class="btn-row">
@@ -1070,7 +1157,7 @@ async function renderFlowPanel() {
   }).join("");
 
   panel.innerHTML = `
-    <h3 style="margin-bottom:20px;font-size:16px">🔬 Research Pipeline — 4-Stage Multi-Agent</h3>
+    <h3 style="margin-bottom:20px;font-size:16px">${iconImg("microscope",15)} Research Pipeline — 4-Stage Multi-Agent</h3>
     <div class="flow-pipeline">${cards}</div>`;
 }
 
@@ -1146,7 +1233,7 @@ async function cancelJob() {
     await api("POST", `/api/jobs/${currentJob}/cancel`);
     toast("Cancellation requested — job will stop at the next checkpoint.");
   } catch(e) {
-    if (btn) { btn.textContent = "✕ Cancel"; btn.disabled = false; }
+    if (btn) { btn.innerHTML = `${iconImg("x",12)} Cancel`; btn.disabled = false; }
     toast(e.message, "error");
   }
 }
@@ -1502,7 +1589,7 @@ async function loadSessions() {
           <div class="session-title">${escHtml(s.title)}</div>
           <div class="session-date">${new Date(s.created_at).toLocaleDateString()}</div>
         </div>
-        <span class="session-del" title="Delete" onclick="deleteSession(event,${s.id})">✕</span>
+        <span class="session-del" title="Delete" onclick="deleteSession(event,${s.id})">${iconImg("x",11)}</span>
       </div>`).join("");
   } catch(e) {
     list.innerHTML = `<p style="font-size:12px;color:var(--danger-text);padding:12px">${e.message}</p>`;
