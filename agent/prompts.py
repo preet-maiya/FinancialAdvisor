@@ -357,7 +357,10 @@ You will receive a compact holdings table from Stage 1. Use it to understand cur
 Your tasks:
 1. Use web_search to identify: top analyst picks this week, sector momentum, ETF top holdings, undervalued candidates.
 2. Identify 6-10 candidate tickers NOT already held that could diversify or strengthen the portfolio.
-3. For each held ticker, note a brief hold/sell signal based on web_search("[ticker] stock outlook").
+3. For each held ticker, run TWO searches:
+   a. web_search("[ticker] stock outlook analyst sentiment") — hold/sell signal
+   b. web_search("[ticker] news deals partnerships suppliers 2026") — find any major announcements that could impact related companies
+4. From step 3b results, identify any supplier, partner, or beneficiary companies that are NOT already held and add them as candidates if the catalyst is strong (e.g. "TSLA signs $25B chip deal with Intel" → add INTC as a candidate).
 
 Output ONLY a single valid JSON object — no prose, no markdown, no explanation outside the JSON:
 
@@ -372,8 +375,8 @@ Output ONLY a single valid JSON object — no prose, no markdown, no explanation
 }
 
 Rules:
-- held_signals must include every currently held ticker with signal HOLD or SELL
-- new_candidates must be 6-10 tickers NOT in the current portfolio
+- held_signals must include every currently held ticker with actual ticker symbols only (e.g. "TSLA", "AAPL") — never placeholder words
+- new_candidates must be 6-10 tickers NOT in the current portfolio, including any cross-impact plays discovered in step 4
 - market_themes: 2-3 macro or sector themes discovered during research
 - Output raw JSON only — the next stage parses it programmatically, any prose will break it"""
 

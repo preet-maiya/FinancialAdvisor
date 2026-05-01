@@ -213,17 +213,20 @@ async def weekly_investment_tracker() -> AnalysisResult:
 def _parse_ticker_batches(discovery_text: str, batch_size: int = 2) -> list[list[str]]:
     """Extract ticker symbols from Stage 2 JSON output and group into batches."""
     import json
+    _skip = {"ETF", "CEO", "GDP", "EPS", "PE", "USA", "US", "NYSE", "HOLD", "HELD", "BUY", "SELL", "AI", "QE", "NEW", "FOR", "NOT", "ALL", "TOP", "THE", "N/A", "NA"}
     try:
         match = re.search(r'\{[\s\S]*\}', discovery_text)
         if match:
             data = json.loads(match.group())
             tickers = []
             for item in data.get("held_signals", []):
-                if "ticker" in item:
-                    tickers.append(item["ticker"])
+                t = item.get("ticker", "")
+                if t and t not in _skip:
+                    tickers.append(t)
             for item in data.get("new_candidates", []):
-                if "ticker" in item:
-                    tickers.append(item["ticker"])
+                t = item.get("ticker", "")
+                if t and t not in _skip:
+                    tickers.append(t)
             tickers = list(dict.fromkeys(tickers))
             if tickers:
                 logger.info("Stage 2 JSON parsed: %d tickers extracted.", len(tickers))
@@ -231,9 +234,8 @@ def _parse_ticker_batches(discovery_text: str, batch_size: int = 2) -> list[list
     except (json.JSONDecodeError, KeyError, TypeError) as e:
         logger.warning("Stage 2 JSON parse failed, falling back to regex: %s", e)
     # Fallback: regex heuristic
-    skip = {"ETF", "CEO", "GDP", "EPS", "PE", "USA", "US", "NYSE", "HOLD", "HELD", "BUY", "SELL", "AI", "QE", "NEW", "FOR", "NOT", "ALL", "TOP", "THE"}
     tickers = list(dict.fromkeys(re.findall(r'\b([A-Z]{2,5})\b', discovery_text)))
-    tickers = [t for t in tickers if t not in skip]
+    tickers = [t for t in tickers if t not in _skip]
     return [tickers[i:i + batch_size] for i in range(0, len(tickers), batch_size)]
 
 

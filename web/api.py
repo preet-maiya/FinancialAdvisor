@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -31,6 +32,14 @@ _scheduler = None
 def set_scheduler(s) -> None:
     global _scheduler
     _scheduler = s
+
+
+@app.get("/api/version")
+async def version():
+    return {
+        "commit": os.getenv("GIT_COMMIT", "unknown"),
+        "build_time": os.getenv("BUILD_TIME", "unknown"),
+    }
 
 
 JOB_DEFAULTS = {
