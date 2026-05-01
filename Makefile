@@ -11,8 +11,9 @@ help:
 	@echo ""
 	@echo "  Docker"
 	@echo "    make build          Build the Docker image"
-	@echo "    make up             Start financeadvisor in the background"
-	@echo "    make up-with-llama  Start financeadvisor + llama.cpp server"
+	@echo "    make up             Build + start financeadvisor (injects git commit/time)"
+	@echo "    make up-qwen3       Build + start financeadvisor + qwen3"
+	@echo "    make up-with-llama  Build + start financeadvisor + llama.cpp server"
 	@echo "    make down           Stop all containers"
 	@echo "    make restart        Restart financeadvisor"
 	@echo "    make logs           Tail live logs"
@@ -38,14 +39,23 @@ setup:
 
 # ── Docker lifecycle ──────────────────────────────────────────────────────────
 build:
-	docker compose build
+	docker compose build \
+		--build-arg GIT_COMMIT=$(shell git rev-parse --short HEAD) \
+		--build-arg BUILD_TIME=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 up:
-	docker compose up -d financeadvisor
+	GIT_COMMIT=$(shell git rev-parse --short HEAD) BUILD_TIME=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ") \
+		docker compose up -d --build financeadvisor
 	@echo "Started. Use 'make logs' to follow output."
 
+up-qwen3:
+	GIT_COMMIT=$(shell git rev-parse --short HEAD) BUILD_TIME=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ") \
+		docker compose --profile qwen3 up -d --build
+	@echo "Started with qwen3. Use 'make logs' to follow output."
+
 up-with-llama:
-	docker compose --profile llama up -d
+	GIT_COMMIT=$(shell git rev-parse --short HEAD) BUILD_TIME=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ") \
+		docker compose --profile llama up -d --build
 	@echo "Started financeadvisor + llama.cpp. Use 'make logs' to follow output."
 
 down:

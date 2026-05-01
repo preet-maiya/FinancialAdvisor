@@ -250,6 +250,19 @@
   .session-item:hover .session-del { opacity: 1; }
   .session-del:hover { color: var(--danger-text); }
 
+  /* Build info footer */
+  #build-info {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+  }
+  #sidebar.collapsed #build-info { display: none; }
+
   /* Runs sidebar tab content */
   #sidebar-runs-panel {
     padding: 14px 12px;
@@ -552,6 +565,8 @@
     </div>
 
   </div>
+
+  <div id="build-info">—</div>
 </div>
 
 <!-- ── Recents overlay (collapsed chat) ─────────────────────── -->
@@ -1698,6 +1713,9 @@ document.getElementById("chat-input").addEventListener("input", function() {
 });
 
 // ── Init ─────────────────────────────────────────────────────
+fetch('/api/version').then(r => r.json()).then(v => {
+  document.getElementById('build-info').textContent = `${v.commit} · ${v.build_time}`;
+}).catch(() => {});
 loadJobs();
 setInterval(loadJobs, 600000);
 connectRunningStream();

@@ -2,5 +2,9 @@
 # Docker Compose merges this automatically when both files are present.
 services:
   financeadvisor:
-    build: .
+    build:
+      context: .
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
     image: null

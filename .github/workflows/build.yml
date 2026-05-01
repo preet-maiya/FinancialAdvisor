@@ -31,9 +31,16 @@ jobs:
             type=raw,value=latest
             type=sha,format=short
 
+      - name: Get short SHA
+        id: short_sha
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            GIT_COMMIT=${{ steps.short_sha.outputs.sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
