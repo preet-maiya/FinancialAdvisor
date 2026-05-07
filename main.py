@@ -88,10 +88,10 @@ def main():
         replace_existing=True,
     )
 
-    # Investment tracker (daily P&L) — 8:00am and 4:00pm daily
+    # Investment tracker (daily P&L) — 8:00am and 4:00pm on weekdays
     scheduler.add_job(
         job_investment_tracker,
-        CronTrigger(hour="8,16", minute=0, timezone=TZ),
+        CronTrigger(day_of_week="mon-fri", hour="8,16", minute=0, timezone=TZ),
         id="investment_tracker",
         name="Investment Tracker",
         replace_existing=True,
@@ -106,10 +106,10 @@ def main():
         replace_existing=True,
     )
 
-    # Snapshot investments — 1:30pm daily (store day's prices to DB)
+    # Snapshot investments — 1:30pm on weekdays (store day's prices to DB)
     scheduler.add_job(
         job_snapshot_investments,
-        CronTrigger(hour=13, minute=30, timezone=TZ),
+        CronTrigger(day_of_week="mon-fri", hour=13, minute=30, timezone=TZ),
         id="snapshot_investments",
         name="Snapshot Investments",
         replace_existing=True,
