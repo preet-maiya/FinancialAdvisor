@@ -9,6 +9,11 @@ Each entry in _running is a dict:
     "stage":      "<current stage name or None>",
     "tool_calls": <int>,
   }
+
+Each entry in _pending is a dict:
+  {
+    "queued_at": "<ISO-8601 UTC>",
+  }
 """
 import asyncio
 import threading
@@ -16,6 +21,7 @@ from datetime import datetime, timezone
 
 _lock = threading.Lock()
 _running: dict[str, dict] = {}  # job_id -> progress dict
+_pending: dict[str, dict] = {}  # job_id -> {"queued_at": "<ISO>"}
 
 # asyncio queues for SSE subscribers (one per connected client)
 _subscribers: list[asyncio.Queue] = []
@@ -28,7 +34,10 @@ _cancel_lock = threading.Lock()
 
 def _notify() -> None:
     """Push a snapshot to all SSE subscribers (called while _lock is held)."""
-    snapshot = {k: dict(v) for k, v in _running.items()}
+    snapshot = {
+        "running": {k: dict(v) for k, v in _running.items()},
+        "pending": {k: dict(v) for k, v in _pending.items()},
+    }
     with _subscribers_lock:
         dead = []
         for q in _subscribers:
@@ -56,11 +65,18 @@ def unsubscribe(q: asyncio.Queue) -> None:
             pass
 
 
+def mark_pending(job_id: str) -> None:
+    with _lock:
+        _pending[job_id] = {"queued_at": datetime.now(timezone.utc).isoformat()}
+        _notify()
+
+
 def mark_started(job_id: str) -> None:
     cancel_ev = threading.Event()
     with _cancel_lock:
         _cancel_events[job_id] = cancel_ev
     with _lock:
+        _pending.pop(job_id, None)
         _running[job_id] = {
             "started_at": datetime.now(timezone.utc).isoformat(),
             "stage": None,
@@ -103,9 +119,13 @@ def mark_done(job_id: str) -> None:
         _cancel_events.pop(job_id, None)
     with _lock:
         _running.pop(job_id, None)
+        _pending.pop(job_id, None)
         _notify()
 
 
-def get_running() -> dict[str, dict]:
+def get_running() -> dict:
     with _lock:
-        return {k: dict(v) for k, v in _running.items()}
+        return {
+            "running": {k: dict(v) for k, v in _running.items()},
+            "pending": {k: dict(v) for k, v in _pending.items()},
+        }

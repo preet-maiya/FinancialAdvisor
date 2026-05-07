@@ -223,14 +223,16 @@ async def insert_job_run(
     status: str,
     error: Optional[str] = None,
     trace: Optional[str] = None,
+    queued_at: Optional[str] = None,
+    pending_seconds: Optional[float] = None,
 ) -> None:
     async with get_db() as db:
         await db.execute(
             """
-            INSERT INTO job_runs (job_id, job_name, started_at, finished_at, duration_seconds, status, error, trace)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO job_runs (job_id, job_name, started_at, finished_at, duration_seconds, status, error, trace, queued_at, pending_seconds)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            [job_id, job_name, started_at, finished_at, duration_seconds, status, error, trace],
+            [job_id, job_name, started_at, finished_at, duration_seconds, status, error, trace, queued_at, pending_seconds],
         )
         await db.commit()
 

@@ -337,6 +337,10 @@ async def trigger_job(job_id: str):
     job = _scheduler.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found in scheduler")
+    import job_state
+    state = job_state.get_running()
+    if job_id in state["running"] or job_id in state["pending"]:
+        raise HTTPException(status_code=409, detail="Job is already running or pending")
     loop = asyncio.get_event_loop()
     loop.run_in_executor(None, job.func)
     return {"ok": True, "message": f"Job {job_id} triggered"}

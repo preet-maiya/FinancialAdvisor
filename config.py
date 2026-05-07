@@ -39,6 +39,9 @@ DB_PATH = os.getenv("DB_PATH", "data/finance.db")
 # Web UI
 WEB_PORT = int(os.getenv("WEB_PORT", "8000"))
 
+# Job concurrency
+JOB_CONCURRENCY = int(os.getenv("JOB_CONCURRENCY", "1"))
+
 # Finnhub
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY", "")
 

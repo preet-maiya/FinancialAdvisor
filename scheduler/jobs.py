@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import threading
 import traceback
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
@@ -7,10 +8,13 @@ from typing import Awaitable, Callable
 from agent.analyzer import daily_digest, anomaly_check, weekly_report, monthly_review, investment_tracker, weekly_investment_tracker, snapshot_investments, stock_research_agent
 from data.fetcher import get_transactions
 from notifications.telegram import send_digest, send_alert
+import config
 import storage.repository as repo
 import job_state
 
 logger = logging.getLogger(__name__)
+
+_job_sem = threading.Semaphore(config.JOB_CONCURRENCY)
 
 JOB_NAMES = {
     "daily_digest":              "Daily Digest",
@@ -37,7 +41,15 @@ def _run(coro):
 def _run_job(job_id: str, coro_factory: Callable[[], Awaitable]) -> None:
     """Generic wrapper: tracks running state and persists the run record."""
     job_name = JOB_NAMES.get(job_id, job_id)
+    queued_at = datetime.now(timezone.utc)
+    job_state.mark_pending(job_id)
+
+    if _job_sem._value == 0:
+        logger.info("Job %s waiting — concurrency limit reached.", job_id)
+
+    _job_sem.acquire()
     started_at = datetime.now(timezone.utc)
+    pending_seconds = (started_at - queued_at).total_seconds()
     job_state.mark_started(job_id)
 
     async def _inner():
@@ -68,12 +80,15 @@ def _run_job(job_id: str, coro_factory: Callable[[], Awaitable]) -> None:
                 status=status,
                 error=error,
                 trace=trace,
+                queued_at=queued_at.isoformat(),
+                pending_seconds=pending_seconds,
             )
 
     try:
         _run(_inner())
     finally:
         job_state.mark_done(job_id)
+        _job_sem.release()
 
 
 def job_daily_digest():

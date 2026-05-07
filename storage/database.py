@@ -129,6 +129,8 @@ MIGRATIONS = [
     "ALTER TABLE analysis_results ADD COLUMN completion_tokens INTEGER",
     "ALTER TABLE analysis_results ADD COLUMN tokens_per_sec REAL",
     "ALTER TABLE analysis_results ADD COLUMN latency_seconds REAL",
+    "ALTER TABLE job_runs ADD COLUMN queued_at TEXT",
+    "ALTER TABLE job_runs ADD COLUMN pending_seconds REAL",
 ]
 
 
